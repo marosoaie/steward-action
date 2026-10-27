@@ -1,0 +1,92 @@
+# The README's workflow, with `uses: ./` for the pull request's own version
+# of the Action: it runs Dangerfile/ and posts the pull request's one
+# summary comment.
+name: Steward
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  steward:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./
+
+  # The README says `pull-requests: write` is the only permission Steward
+  # needs for its comment. These jobs check it, and run only when the pull
+  # request has the check-permissions label, since every probe's comment
+  # notifies the pull request's participants. Adding the label doesn't
+  # start them: the next push or edit of the pull request does. A `labeled`
+  # trigger would run this workflow on every label, and its concurrency
+  # group would cancel the Steward job in progress. They run after
+  # `steward`, in its run, so only one job posts at a time. A fork's or
+  # Dependabot's pull request gets a read-only token whatever the job asks
+  # for, so they don't run there.
+  pull-requests-write:
+    needs: steward
+    if: ${{ !cancelled() && contains(github.event.pull_request.labels.*.name, 'check-permissions') && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' }}
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+      PULL_REQUEST: ${{ github.event.pull_request.number }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Create, update and delete a comment
+        run: tests/comments.sh probe allowed
+      - name: Plant two summary comments
+        id: plant
+        run: tests/comments.sh plant
+      # Updates the oldest summary and deletes the others, the newer planted
+      # one among them. Fails when the pull request has failures, which this
+      # job doesn't check.
+      - uses: ./
+        continue-on-error: true
+        with:
+          report-artifact: steward-report-pull-requests-write
+      - name: Check that Steward deleted it
+        run: tests/comments.sh gone "$PLANTED"
+        env:
+          PLANTED: ${{ steps.plant.outputs.id }}
+
+  # GitHub's REST documentation lists `issues: write` as enough too, but on
+  # a pull request the workflow's token gets 403, "Resource not accessible
+  # by integration" (run 40567615423).
+  issues-write:
+    needs: steward
+    if: ${{ !cancelled() && contains(github.event.pull_request.labels.*.name, 'check-permissions') && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' }}
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Fail to create a comment
+        run: tests/comments.sh probe forbidden
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PULL_REQUEST: ${{ github.event.pull_request.number }}
+
+  pull-requests-read:
+    needs: steward
+    if: ${{ !cancelled() && contains(github.event.pull_request.labels.*.name, 'check-permissions') && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' }}
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Fail to create a comment
+        run: tests/comments.sh probe forbidden
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PULL_REQUEST: ${{ github.event.pull_request.number }}
