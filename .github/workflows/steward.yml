@@ -54,6 +54,9 @@ jobs:
         env:
           PLANTED: ${{ steps.plant.outputs.id }}
 
+  # GitHub's REST documentation lists `issues: write` as enough too, but on
+  # a pull request the workflow's token gets 403, "Resource not accessible
+  # by integration" (run 40567615423).
   issues-write:
     needs: steward
     if: ${{ !cancelled() && contains(github.event.pull_request.labels.*.name, 'check-permissions') }}
@@ -62,8 +65,8 @@ jobs:
       issues: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Create, update and delete a comment
-        run: tests/comments.sh probe allowed
+      - name: Fail to create a comment
+        run: tests/comments.sh probe forbidden
         env:
           GITHUB_TOKEN: ${{ github.token }}
           PULL_REQUEST: ${{ github.event.pull_request.number }}

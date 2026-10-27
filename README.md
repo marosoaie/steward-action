@@ -92,9 +92,11 @@ permissions:
 
 `pull-requests: write` is the only permission Steward needs for its
 comment: with it alone, the workflow's token creates, updates and deletes
-a pull request's comments. GitHub's REST documentation lists either it or
-`issues: write`, and this repository's CI checks both, and that
-`pull-requests: read` can't (see [Development](#development)).
+a pull request's comments. GitHub's REST documentation lists
+`issues: write` as enough too, but on a pull request it isn't: the token
+gets 403, "Resource not accessible by integration". This repository's CI
+checks all three, and that `pull-requests: read` can't post (see
+[Development](#development)).
 `contents: read` lets the job check out a private repository. Set both
 explicitly: new repositories give `GITHUB_TOKEN` read-only permissions by
 default.
@@ -201,8 +203,9 @@ input documented here.
 - **Steward** (`.github/workflows/steward.yml`) is the usage above, and
   posts the pull request's summary comment. With the `check-permissions`
   label, it also checks what the workflow's token can do with comments
-  under `pull-requests: write` alone (including Steward deleting a planted
-  duplicate summary), `issues: write` alone, and `pull-requests: read`.
+  under `pull-requests: write` alone (create, update and delete, and
+  Steward deleting a planted second summary), and that `issues: write`
+  alone and `pull-requests: read` can't create one.
 - **CI** (`.github/workflows/ci.yml`) lints the workflows and scripts with
   actionlint and ShellCheck, runs the fixture's tests, and runs the Action
   in a `swift:6.2` container, on macOS, with Swift 6.2 from swiftly, and
