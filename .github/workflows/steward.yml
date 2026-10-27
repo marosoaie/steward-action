@@ -29,10 +29,12 @@ jobs:
   # start them: the next push or edit of the pull request does. A `labeled`
   # trigger would run this workflow on every label, and its concurrency
   # group would cancel the Steward job in progress. They run after
-  # `steward`, in its run, so only one job posts at a time.
+  # `steward`, in its run, so only one job posts at a time. A fork's or
+  # Dependabot's pull request gets a read-only token whatever the job asks
+  # for, so they don't run there.
   pull-requests-write:
     needs: steward
-    if: ${{ !cancelled() && contains(github.event.pull_request.labels.*.name, 'check-permissions') }}
+    if: ${{ !cancelled() && contains(github.event.pull_request.labels.*.name, 'check-permissions') && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' }}
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
@@ -62,7 +64,7 @@ jobs:
   # by integration" (run 40567615423).
   issues-write:
     needs: steward
-    if: ${{ !cancelled() && contains(github.event.pull_request.labels.*.name, 'check-permissions') }}
+    if: ${{ !cancelled() && contains(github.event.pull_request.labels.*.name, 'check-permissions') && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' }}
     runs-on: ubuntu-latest
     permissions:
       issues: write
@@ -76,7 +78,7 @@ jobs:
 
   pull-requests-read:
     needs: steward
-    if: ${{ !cancelled() && contains(github.event.pull_request.labels.*.name, 'check-permissions') }}
+    if: ${{ !cancelled() && contains(github.event.pull_request.labels.*.name, 'check-permissions') && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' }}
     runs-on: ubuntu-latest
     permissions:
       pull-requests: read

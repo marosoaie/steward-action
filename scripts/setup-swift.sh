@@ -19,17 +19,23 @@ fail() {
 [[ $version =~ ^[A-Za-z0-9._-]*$ ]] || fail "swift-version is a version such as 6.2 or 6.2.1, not \"$version\"."
 
 # Whether `swift` is on PATH, and is SWIFT_VERSION when that's set: 6.2
-# matches "Swift version 6.2.1 (swift-6.2.1-RELEASE)".
+# matches "Swift version 6.2.1 (swift-6.2.1-RELEASE)", and 6.2.0 matches
+# "Swift version 6.2", as 6.2.0 reports itself, but not 6.2.1.
 has_swift() {
     command -v swift >/dev/null || return 1
     [ -n "$version" ] || return 0
-    local installed
+    local installed pattern
     installed=$(swift --version 2>&1) || return 1
-    grep -Eq "Swift version ${version//./\\.}([. ]|$)" <<<"$installed"
+    if [[ $version =~ ^([0-9]+\.[0-9]+)\.0$ ]]; then
+        pattern="${BASH_REMATCH[1]//./\\.}(\\.0)?( |$)"
+    else
+        pattern="${version//./\\.}([. ]|$)"
+    fi
+    grep -Eq "Swift version $pattern" <<<"$installed"
 }
 
 install_swift() {
-    local toolchain=$1 work arch
+    local toolchain=$1 work arch location
     work=$(mktemp -d "${RUNNER_TEMP:-/tmp}/swiftly.XXXXXX")
     arch=$(uname -m)
     echo "Installing Swift $toolchain with swiftly."
@@ -69,20 +75,24 @@ install_swift() {
         fi
         ${as_root[@]+"${as_root[@]}"} bash "$work/post-install.sh"
     fi
+    # The toolchain's own directory, not swiftly's `swift`, which would
+    # follow a .swift-version file in the checkout to another toolchain.
+    location=$(swiftly use --print-location)
     cd - >/dev/null
-    hash -r
-    echo "$SWIFTLY_BIN_DIR" >>"$GITHUB_PATH"
-    {
-        echo "SWIFTLY_HOME_DIR=$SWIFTLY_HOME_DIR"
-        echo "SWIFTLY_BIN_DIR=$SWIFTLY_BIN_DIR"
-    } >>"$GITHUB_ENV"
+    export PATH="$location/usr/bin:$PATH"
+    echo "$location/usr/bin" >>"$GITHUB_PATH"
 }
 
 case "$(uname -s)" in
 Linux)
     # Not `has_swift || install_swift`: a function called on the right of
     # `||` runs with errexit off.
-    if ! has_swift; then install_swift "${version:-latest}"; fi
+    if ! has_swift; then
+        install_swift "${version:-latest}"
+        # What swiftly installed is the version asked for, whatever it
+        # calls itself, such as a snapshot.
+        version=
+    fi
     ;;
 Darwin)
     [ -z "$version" ] ||

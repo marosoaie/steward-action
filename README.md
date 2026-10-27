@@ -154,9 +154,10 @@ private repository checked out with `persist-credentials: false`, use
   October 2026), which the Action uses unless `swift-version` asks for
   another. A runner without Swift gets the latest release from swiftly,
   which needs `curl`, `gpg` and the toolchain's system packages (the
-  Action installs those with `sudo` when it can). The `swift` that swiftly
-  installs follows a `.swift-version` file in the repository, if there's
-  one.
+  Action installs those with `sudo` when it can). The Action puts that
+  toolchain itself on `PATH`, for the rest of the job too, so a
+  `.swift-version` file in the repository doesn't send swiftly's `swift`
+  to another one.
 - **A container job** (`container: swift:6.2`) uses the image's Swift. The
   image needs `git`, so that `actions/checkout` makes a real checkout.
 - **macOS** (`macos-26`, as Steward needs macOS 26) uses the selected
