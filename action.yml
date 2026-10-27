@@ -74,11 +74,10 @@ runs:
     - name: Fetch the pull request's history
       shell: bash
       working-directory: ${{ github.workspace }}
-      run: '"$GITHUB_ACTION_PATH/scripts/fetch-history.sh" "$BASE" "$HEAD" "$COMMITS"'
+      run: '"$GITHUB_ACTION_PATH/scripts/fetch-history.sh" "$BASE" "$HEAD"'
       env:
         BASE: ${{ github.event.pull_request.base.sha }}
         HEAD: ${{ github.event.pull_request.head.sha }}
-        COMMITS: ${{ github.event.pull_request.commits }}
 
     - name: Restore the Dangerfile's build
       id: cache

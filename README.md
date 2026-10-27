@@ -135,14 +135,10 @@ commit `actions/checkout` checks out to the head. So it needs the base and
 head commits, with their history back to the merge base on every path.
 The Action fetches them itself:
 
-- With `actions/checkout`'s default `fetch-depth: 1`, it fetches the base
-  and head commits at a depth of the pull request's commits plus 50, and
-  doubles the depth until the history passes Steward's check, or fetches
-  their whole history past 10,000. It never shortens history the checkout
-  already has, and never fetches the merge commit itself, whose presence
-  tells Steward which commit the build logs come from.
-- With `fetch-depth: 0`, or any history that's already enough, it fetches
-  nothing.
+- With `actions/checkout`'s default `fetch-depth: 1`, or any shallow
+  checkout, it fetches the whole history of the base and head commits
+  (`git fetch --unshallow`), by SHA, so a fork's head comes too.
+- With `fetch-depth: 0`, it fetches nothing.
 
 The fetch uses the credentials `actions/checkout` keeps by default. In a
 private repository checked out with `persist-credentials: false`, use
