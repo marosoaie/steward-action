@@ -202,7 +202,7 @@ input documented here.
 
 - **Steward** (`.github/workflows/steward.yml`) is the usage above, and
   posts the pull request's summary comment. With the `check-permissions`
-  label, it also checks what the workflow's token can do with comments
+  label, from the next push or edit on, it also checks what the workflow's token can do with comments
   under `pull-requests: write` alone (create, update and delete, and
   Steward deleting a planted second summary), and that `issues: write`
   alone and `pull-requests: read` can't create one.

@@ -2,13 +2,13 @@
 # Runs the Dangerfile package's product, already built, with the Action's
 # inputs as Steward's options. Unless REPORT_ARTIFACT is empty, writes
 # `report`, the path of the report it asks Steward for, to GITHUB_OUTPUT
-# first, so a failing run's report is still uploaded.
+# first, so a failing run's report is still uploaded. The path is new for
+# every run, so a second run in the job never uploads the first one's.
 set -euo pipefail
 
 arguments=()
 if [ -n "$REPORT_ARTIFACT" ]; then
-    report=${RUNNER_TEMP:?}/steward/report.json
-    mkdir -p "$(dirname "$report")"
+    report=$(mktemp -d "${RUNNER_TEMP:?}/steward.XXXXXX")/report.json
     echo "report=$report" >>"$GITHUB_OUTPUT"
     arguments+=("--report=$report")
 fi

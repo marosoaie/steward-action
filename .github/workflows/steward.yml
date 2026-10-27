@@ -25,8 +25,11 @@ jobs:
   # The README says `pull-requests: write` is the only permission Steward
   # needs for its comment. These jobs check it, and run only when the pull
   # request has the check-permissions label, since every probe's comment
-  # notifies the pull request's participants. They run after `steward`, in
-  # its concurrency group, so only one run posts at a time.
+  # notifies the pull request's participants. Adding the label doesn't
+  # start them: the next push or edit of the pull request does. A `labeled`
+  # trigger would run this workflow on every label, and its concurrency
+  # group would cancel the Steward job in progress. They run after
+  # `steward`, in its run, so only one job posts at a time.
   pull-requests-write:
     needs: steward
     if: ${{ !cancelled() && contains(github.event.pull_request.labels.*.name, 'check-permissions') }}

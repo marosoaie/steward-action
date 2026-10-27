@@ -54,8 +54,10 @@ swift test --package-path Dangerfile
 ```
 
 The Action itself is only tested by running it: open a pull request, and
-CI runs it in every configuration. Add the `check-permissions` label to
-rerun the permission checks; they post and delete comments, which notify.
+CI runs it in every configuration. The permission checks run on pull
+requests with the `check-permissions` label, from the next push or edit of
+the description on (adding the label alone starts nothing); they post and
+delete comments, which notify.
 
 ## Releases
 

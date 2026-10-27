@@ -95,7 +95,8 @@ jobs:
 
   # With a read-only token, posting fails with a warning, and the findings
   # decide the outcome; with fail-on-post-error, a post that can't happen
-  # fails the step.
+  # fails the step. On a fork's pull request, Steward doesn't post at all,
+  # so there the findings decide both.
   posting-failure:
     runs-on: ubuntu-latest
     permissions:
@@ -119,9 +120,14 @@ jobs:
         run: |
           failures=$(jq '[.findings[] | select(.kind == "failure")] | length' "$REPORT")
           expected=$([ "$failures" = 0 ] && echo success || echo failure)
-          echo "read-only: $READ_ONLY (expected $expected, $failures failures); strict: $STRICT (expected failure)"
-          [ "$READ_ONLY" = "$expected" ] && [ "$STRICT" = failure ]
+          strict=$([ "$FORK" = true ] && echo "$expected" || echo failure)
+          echo "read-only: $READ_ONLY (expected $expected, $failures failures); strict: $STRICT (expected $strict)"
+          [ "$READ_ONLY" = "$expected" ] && [ "$STRICT" = "$strict" ]
+          echo "reports: $REPORT, $STRICT_REPORT"
+          [ "$REPORT" != "$STRICT_REPORT" ]
         env:
           REPORT: ${{ steps.read-only.outputs.report }}
+          STRICT_REPORT: ${{ steps.strict.outputs.report }}
           READ_ONLY: ${{ steps.read-only.outcome }}
           STRICT: ${{ steps.strict.outcome }}
+          FORK: ${{ github.event.pull_request.head.repo.full_name != github.repository }}
