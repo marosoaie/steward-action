@@ -43,7 +43,10 @@ install_swift() {
     gpg --batch --quiet --verify "$work/swiftly.tar.gz.sig" "$work/swiftly.tar.gz" ||
         fail "swiftly's download doesn't match its signature."
     tar -xzf "$work/swiftly.tar.gz" -C "$work"
-    "$work/swiftly" init --assume-yes --skip-install --quiet-shell-followup --no-modify-profile
+    # Outside the checkout: `swiftly install --use` writes a .swift-version
+    # file at the root of the git repository it runs in.
+    cd "$work"
+    ./swiftly init --assume-yes --skip-install --quiet-shell-followup --no-modify-profile
     # shellcheck source=/dev/null
     . "${SWIFTLY_HOME_DIR:-$HOME/.local/share/swiftly}/env.sh"
     swiftly install --use --assume-yes --post-install-file="$work/post-install.sh" "$toolchain"
@@ -51,13 +54,20 @@ install_swift() {
         echo "The toolchain needs these system packages first:"
         cat "$work/post-install.sh"
         if [ "$(id -u)" = 0 ]; then
-            bash "$work/post-install.sh"
+            as_root=()
         elif command -v sudo >/dev/null; then
-            sudo bash "$work/post-install.sh"
+            as_root=(sudo)
         else
             fail "Swift $toolchain needs system packages, and this job can't install them: see the log."
         fi
+        # The script installs with apt-get without updating its index, which
+        # a runner image's can be too old for.
+        if grep -q apt-get "$work/post-install.sh"; then
+            ${as_root[@]+"${as_root[@]}"} apt-get update -qq
+        fi
+        ${as_root[@]+"${as_root[@]}"} bash "$work/post-install.sh"
     fi
+    cd - >/dev/null
     hash -r
     echo "$SWIFTLY_BIN_DIR" >>"$GITHUB_PATH"
     {

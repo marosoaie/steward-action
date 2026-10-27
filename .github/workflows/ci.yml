@@ -85,8 +85,13 @@ jobs:
           token: ''
           swift-version: '6.2'
           report-artifact: steward-report-swiftly
-      - name: Check the toolchain
-        run: swift --version 2>&1 | tee /dev/stderr | grep -q 'Swift version 6\.2[. ]'
+      - name: Check the toolchain, and that the checkout is unchanged
+        run: |
+          installed=$(swift --version 2>&1)
+          echo "$installed"
+          grep -q 'Swift version 6\.2[. ]' <<<"$installed"
+          git status --porcelain
+          test -z "$(git status --porcelain)"
 
   # With a read-only token, posting fails with a warning, and the findings
   # decide the outcome; with fail-on-post-error, a post that can't happen
