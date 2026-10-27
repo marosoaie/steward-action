@@ -41,9 +41,11 @@ binaries or Git LFS, and the maintainer choosing versions.
 - **The Action doesn't pin Steward.** Each Dangerfile's `Package.resolved`
   does; the fixture follows swift-steward's `main` until a release has
   Steward, as swift-steward's template does.
-- **Only one job per pull request posts.** `steward.yml`'s job owns the
-  summary comment; every other run of the Action in CI uses `token: ''`
-  or a read-only token, and its own `report-artifact` name.
+- **Only one job per pull request posts at a time.** `steward.yml`'s
+  `steward` job owns the summary comment, and the label-gated
+  `pull-requests-write` check posts only after it, in the same run. Every
+  other run of the Action in CI uses `token: ''` or a read-only token, and
+  each has its own `report-artifact` name.
 
 ## Checks
 
