@@ -35,7 +35,9 @@ install_swift() {
     echo "Installing Swift $toolchain with swiftly."
     curl -fsSL --retry 3 -o "$work/swiftly.tar.gz" "https://download.swift.org/swiftly/linux/swiftly-$arch.tar.gz"
     curl -fsSL --retry 3 -o "$work/swiftly.tar.gz.sig" "https://download.swift.org/swiftly/linux/swiftly-$arch.tar.gz.sig"
-    curl -fsSL --retry 3 -o "$work/keys.asc" https://www.swift.org/keys/all-keys.asc
+    # --compressed: swift.org's CDN can answer with a gzip-encoded copy even
+    # when it wasn't asked for one.
+    curl -fsSL --retry 3 --compressed -o "$work/keys.asc" https://www.swift.org/keys/all-keys.asc
     # swiftly verifies the toolchains it downloads; this verifies swiftly.
     export GNUPGHOME="$work/gnupg"
     mkdir -m 700 "$GNUPGHOME"
