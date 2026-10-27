@@ -1,0 +1,122 @@
+# Lints the Action and runs it where the Steward workflow doesn't: in a
+# container, on macOS, with a toolchain swiftly installs, and with a token
+# that can't post. These runs post nothing, so the Steward workflow's
+# summary stays the pull request's only one; each still fails when the
+# pull request has failures, as the Steward job does.
+name: CI
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install actionlint and ShellCheck
+        run: |
+          cd "$RUNNER_TEMP"
+          curl -fsSLO https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz
+          curl -fsSLO https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.x86_64.tar.xz
+          sha256sum --check <<'EOF'
+          8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  actionlint_1.7.12_linux_amd64.tar.gz
+          8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198  shellcheck-v0.11.0.linux.x86_64.tar.xz
+          EOF
+          tar -xzf actionlint_1.7.12_linux_amd64.tar.gz actionlint
+          tar -xJf shellcheck-v0.11.0.linux.x86_64.tar.xz --strip-components=1 shellcheck-v0.11.0/shellcheck
+          echo "$RUNNER_TEMP" >>"$GITHUB_PATH"
+      # actionlint runs ShellCheck on the workflows' scripts, and checks the
+      # inputs of `uses: ./` against action.yml.
+      - run: actionlint -color
+      - run: shellcheck scripts/*.sh tests/*.sh
+
+  dangerfile-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: swift
+        run: echo "version=$(swift --version 2>&1 | sha256sum | cut -c1-16)" >>"$GITHUB_OUTPUT"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: Dangerfile/.build
+          key: dangerfile-tests-${{ runner.os }}-${{ runner.arch }}-${{ steps.swift.outputs.version }}-${{ hashFiles('Dangerfile/Package.resolved') }}
+      - run: swift test --package-path Dangerfile
+
+  # A container job's checkout belongs to the runner's user, so git refuses
+  # it until the Action trusts the workspace.
+  container:
+    runs-on: ubuntu-latest
+    container: swift:6.2
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Check that git refuses the checkout
+        run: |
+          if git -C "$GITHUB_WORKSPACE" rev-parse HEAD; then
+            echo "::error::git read the checkout, so this job doesn't check that the Action trusts it."
+            exit 1
+          fi
+      - uses: ./
+        with:
+          token: ''
+          report-artifact: steward-report-container
+
+  macos:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./
+        with:
+          token: ''
+          report-artifact: steward-report-macos
+
+  swiftly:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./
+        with:
+          token: ''
+          swift-version: '6.2'
+          report-artifact: steward-report-swiftly
+      - name: Check the toolchain
+        run: swift --version 2>&1 | tee /dev/stderr | grep -q 'Swift version 6\.2[. ]'
+
+  # With a read-only token, posting fails with a warning, and the findings
+  # decide the outcome; with fail-on-post-error, a post that can't happen
+  # fails the step.
+  posting-failure:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: read-only
+        uses: ./
+        continue-on-error: true
+        with:
+          report-artifact: steward-report-read-only
+      - id: strict
+        uses: ./
+        continue-on-error: true
+        with:
+          token: ''
+          fail-on-post-error: true
+          report-artifact: steward-report-strict
+      - name: Check the outcomes
+        run: |
+          failures=$(jq '[.findings[] | select(.kind == "failure")] | length' "$REPORT")
+          expected=$([ "$failures" = 0 ] && echo success || echo failure)
+          echo "read-only: $READ_ONLY (expected $expected, $failures failures); strict: $STRICT (expected failure)"
+          [ "$READ_ONLY" = "$expected" ] && [ "$STRICT" = failure ]
+        env:
+          REPORT: ${{ steps.read-only.outputs.report }}
+          READ_ONLY: ${{ steps.read-only.outcome }}
+          STRICT: ${{ steps.strict.outcome }}

@@ -1,0 +1,83 @@
+# The README's workflow, with `uses: ./` for the pull request's own version
+# of the Action: it runs Dangerfile/ and posts the pull request's one
+# summary comment.
+name: Steward
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  steward:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./
+
+  # The README says `pull-requests: write` is the only permission Steward
+  # needs for its comment. These jobs check it, and run only when the pull
+  # request has the check-permissions label, since every probe's comment
+  # notifies the pull request's participants. They run after `steward`, in
+  # its concurrency group, so only one run posts at a time.
+  pull-requests-write:
+    needs: steward
+    if: ${{ !cancelled() && contains(github.event.pull_request.labels.*.name, 'check-permissions') }}
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+      PULL_REQUEST: ${{ github.event.pull_request.number }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Create, update and delete a comment
+        run: tests/comments.sh probe allowed
+      - name: Plant a second summary comment
+        id: plant
+        run: tests/comments.sh plant
+      # Updates the older summary and deletes the planted one. Fails when the
+      # pull request has failures, which this job doesn't check.
+      - uses: ./
+        continue-on-error: true
+        with:
+          report-artifact: steward-report-pull-requests-write
+      - name: Check that Steward deleted it
+        run: tests/comments.sh gone "$PLANTED"
+        env:
+          PLANTED: ${{ steps.plant.outputs.id }}
+
+  issues-write:
+    needs: steward
+    if: ${{ !cancelled() && contains(github.event.pull_request.labels.*.name, 'check-permissions') }}
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Create, update and delete a comment
+        run: tests/comments.sh probe allowed
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PULL_REQUEST: ${{ github.event.pull_request.number }}
+
+  pull-requests-read:
+    needs: steward
+    if: ${{ !cancelled() && contains(github.event.pull_request.labels.*.name, 'check-permissions') }}
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Fail to create a comment
+        run: tests/comments.sh probe forbidden
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PULL_REQUEST: ${{ github.event.pull_request.number }}
