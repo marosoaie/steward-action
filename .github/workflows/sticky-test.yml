@@ -1,0 +1,12 @@
+# A deliberate finding for testing the summary comment: an action pinned to
+# a tag. It never runs (workflow_dispatch only), and the test's last push
+# deletes it.
+name: Sticky comment test
+
+on: workflow_dispatch
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
