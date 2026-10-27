@@ -20,6 +20,7 @@ binaries or Git LFS, and the maintainer choosing versions.
 | `scripts/` | The steps' logic, one script each, so ShellCheck sees it |
 | `Dangerfile/` | This repository's own checks, and the fixture CI runs the Action on |
 | `tests/` | Scripts the CI's checks use |
+| `docs/decisions.md` | The design decisions and their alternatives; add a row with each new one |
 | `.github/workflows/steward.yml` | The README's usage with `uses: ./`; posts the summary comment |
 | `.github/workflows/ci.yml` | Lint, the fixture's tests, and the Action in a container, on macOS, with swiftly, and unable to post |
 
@@ -38,6 +39,9 @@ binaries or Git LFS, and the maintainer choosing versions.
   too, and pass `shellcheck` with no exceptions. Mind the traps: a function
   called on the right of `||` runs with errexit off, and `cmd | grep -q`
   under pipefail can fail on SIGPIPE.
+- **Less code over a small speed gain.** The maintainer's rule (decision
+  6): don't write code to save time unless the time is large. The history
+  step fetches everything rather than just enough.
 - **The Action doesn't pin Steward.** Each Dangerfile's `Package.resolved`
   does; the fixture follows swift-steward's `main` until a release has
   Steward, as swift-steward's template does.
