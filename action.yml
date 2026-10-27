@@ -35,6 +35,9 @@ inputs:
       The name of the artifact the JSON report is uploaded as, which a
       summary too long for the comment points at. Empty writes no report.
     default: steward-report
+  sticky-test:
+    description: A deliberate finding for testing the summary comment, undocumented.
+    default: ''
   swift-version:
     description: >-
       On Linux, the Swift version to install with swiftly, such as 6.2 or
