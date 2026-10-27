@@ -45,11 +45,12 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Create, update and delete a comment
         run: tests/comments.sh probe allowed
-      - name: Plant a second summary comment
+      - name: Plant two summary comments
         id: plant
         run: tests/comments.sh plant
-      # Updates the older summary and deletes the planted one. Fails when the
-      # pull request has failures, which this job doesn't check.
+      # Updates the oldest summary and deletes the others, the newer planted
+      # one among them. Fails when the pull request has failures, which this
+      # job doesn't check.
       - uses: ./
         continue-on-error: true
         with:

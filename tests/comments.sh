@@ -6,12 +6,13 @@
 #       Creates, updates and deletes a comment, and checks GitHub's answers:
 #       201, 200 and 204, or a creation refused with 403.
 #   comments.sh plant
-#       Posts a second summary comment, as a run racing another would, and
-#       writes its id to GITHUB_OUTPUT as `id`.
+#       Posts two summary comments, as racing runs would, so the newer is a
+#       duplicate even when the pull request has no summary yet, and writes
+#       the newer one's id to GITHUB_OUTPUT as `id`.
 #   comments.sh gone <id>
 #       Checks that the comment is deleted and one summary comment is left.
 #
-# Needs GITHUB_TOKEN, PULL_REQUEST, and the variables Actions sets.
+# Needs GITHUB_TOKEN, PULL_REQUEST, the variables Actions sets, and gh.
 set -euo pipefail
 
 marker='<!-- steward-summary -->'
@@ -55,19 +56,20 @@ probe)
     expect "Deleting it" 204 "$(api DELETE "issues/comments/$id")"
     ;;
 plant)
-    status=$(api POST "issues/$PULL_REQUEST/comments" \
-        --data "$(body "$marker
-A second summary comment, planted for Steward to delete.")")
-    expect "Planting a second summary" 201 "$status"
+    for which in older newer; do
+        status=$(api POST "issues/$PULL_REQUEST/comments" \
+            --data "$(body "$marker
+A summary comment planted for Steward to keep, if it's the oldest, or delete.")")
+        expect "Planting the $which summary" 201 "$status"
+    done
     echo "id=$(jq -r .id "$response")" >>"$GITHUB_OUTPUT"
     ;;
 gone)
     expect "Reading the planted summary" 404 "$(api GET "issues/comments/$2")"
-    expect "Listing the comments" 200 "$(api GET "issues/$PULL_REQUEST/comments?per_page=100")"
-    summaries=$(jq --arg marker "$marker" \
-        '[.[] | select(.user.login == "github-actions[bot]" and (.body | startswith($marker)))] | length' \
-        "$response")
-    expect "Summary comments left" 1 "$summaries"
+    # Every page, as Steward reads them.
+    summaries=$(GH_TOKEN=$GITHUB_TOKEN gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PULL_REQUEST/comments?per_page=100" \
+        --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$marker\"))) | .id" | wc -l)
+    expect "Summary comments left" 1 "$((summaries))"
     ;;
 *)
     echo "Usage: comments.sh probe allowed|forbidden | plant | gone <id>" >&2
