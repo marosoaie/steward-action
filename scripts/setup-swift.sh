@@ -1,0 +1,96 @@
+#!/usr/bin/env bash
+# Puts a Swift toolchain on PATH, and writes `key`, a hash of the build's
+# environment for the build cache's key, to GITHUB_OUTPUT.
+#
+# On Linux, SWIFT_VERSION (such as 6.2 or 6.2.1) is installed with swiftly,
+# swift.org's installer, unless the runner's Swift is that version already.
+# Without it, the runner's Swift is used, and the latest release is
+# installed only when there's none. On macOS, the selected Xcode's Swift
+# is used.
+set -euo pipefail
+
+version=${SWIFT_VERSION:-}
+
+fail() {
+    echo "::error title=Steward::$1"
+    exit 1
+}
+
+[[ $version =~ ^[A-Za-z0-9._-]*$ ]] || fail "swift-version is a version such as 6.2 or 6.2.1, not \"$version\"."
+
+# Whether `swift` is on PATH, and is SWIFT_VERSION when that's set: 6.2
+# matches "Swift version 6.2.1 (swift-6.2.1-RELEASE)".
+has_swift() {
+    command -v swift >/dev/null || return 1
+    [ -n "$version" ] || return 0
+    local installed
+    installed=$(swift --version 2>&1) || return 1
+    grep -Eq "Swift version ${version//./\\.}([. ]|$)" <<<"$installed"
+}
+
+install_swift() {
+    local toolchain=$1 work arch
+    work=$(mktemp -d "${RUNNER_TEMP:-/tmp}/swiftly.XXXXXX")
+    arch=$(uname -m)
+    echo "Installing Swift $toolchain with swiftly."
+    curl -fsSL --retry 3 -o "$work/swiftly.tar.gz" "https://download.swift.org/swiftly/linux/swiftly-$arch.tar.gz"
+    curl -fsSL --retry 3 -o "$work/swiftly.tar.gz.sig" "https://download.swift.org/swiftly/linux/swiftly-$arch.tar.gz.sig"
+    curl -fsSL --retry 3 -o "$work/keys.asc" https://www.swift.org/keys/all-keys.asc
+    # swiftly verifies the toolchains it downloads; this verifies swiftly.
+    export GNUPGHOME="$work/gnupg"
+    mkdir -m 700 "$GNUPGHOME"
+    gpg --batch --quiet --import "$work/keys.asc"
+    gpg --batch --quiet --verify "$work/swiftly.tar.gz.sig" "$work/swiftly.tar.gz" ||
+        fail "swiftly's download doesn't match its signature."
+    tar -xzf "$work/swiftly.tar.gz" -C "$work"
+    "$work/swiftly" init --assume-yes --skip-install --quiet-shell-followup --no-modify-profile
+    # shellcheck source=/dev/null
+    . "${SWIFTLY_HOME_DIR:-$HOME/.local/share/swiftly}/env.sh"
+    swiftly install --use --assume-yes --post-install-file="$work/post-install.sh" "$toolchain"
+    if [ -s "$work/post-install.sh" ]; then
+        echo "The toolchain needs these system packages first:"
+        cat "$work/post-install.sh"
+        if [ "$(id -u)" = 0 ]; then
+            bash "$work/post-install.sh"
+        elif command -v sudo >/dev/null; then
+            sudo bash "$work/post-install.sh"
+        else
+            fail "Swift $toolchain needs system packages, and this job can't install them: see the log."
+        fi
+    fi
+    hash -r
+    echo "$SWIFTLY_BIN_DIR" >>"$GITHUB_PATH"
+    {
+        echo "SWIFTLY_HOME_DIR=$SWIFTLY_HOME_DIR"
+        echo "SWIFTLY_BIN_DIR=$SWIFTLY_BIN_DIR"
+    } >>"$GITHUB_ENV"
+}
+
+case "$(uname -s)" in
+Linux)
+    # Not `has_swift || install_swift`: a function called on the right of
+    # `||` runs with errexit off.
+    if ! has_swift; then install_swift "${version:-latest}"; fi
+    ;;
+Darwin)
+    [ -z "$version" ] ||
+        fail "swift-version is for Linux runners. On macOS, select the Xcode whose Swift to use, with xcode-select or DEVELOPER_DIR."
+    ;;
+*)
+    fail "Steward runs on Linux and macOS runners, and this one runs $(uname -s)."
+    ;;
+esac
+
+has_swift || fail "There's no Swift ${version:-toolchain} on PATH."
+
+# What a build directory depends on besides the package: the toolchain, the
+# OS release, such as a container's rather than the runner's, and the
+# workspace's path, which SwiftPM records in it.
+environment() {
+    swift --version 2>&1
+    if [ -f /etc/os-release ]; then cat /etc/os-release; else sw_vers; fi
+    echo "$GITHUB_WORKSPACE"
+}
+
+swift --version
+echo "key=$(environment | git hash-object --stdin | cut -c1-16)" >>"$GITHUB_OUTPUT"

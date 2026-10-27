@@ -1,0 +1,129 @@
+name: Steward
+description: Check a pull request with a Dangerfile package's Swift rules, and post the findings as one comment.
+author: Mihai Arosoaie
+branding:
+  icon: check-circle
+  color: orange
+
+inputs:
+  package-path:
+    description: >-
+      The Dangerfile package's directory, relative to the repository's root.
+    default: Dangerfile
+  product:
+    description: >-
+      The package's executable product, which runs the rules.
+    default: Dangerfile
+  token:
+    description: >-
+      The token Steward posts the summary comment with. The workflow's own
+      by default. A personal access token or a GitHub App's token also
+      needs summary-author. Empty posts nothing.
+    default: ${{ github.token }}
+  summary-author:
+    description: >-
+      The login the token posts as, whose summary comments Steward updates.
+      Empty means the workflow token's account, github-actions[bot].
+    default: ''
+  fail-on-post-error:
+    description: >-
+      Whether a failure to post the summary fails the step. When false, it's
+      a warning, and the findings alone decide the step's outcome.
+    default: 'false'
+  report-artifact:
+    description: >-
+      The name of the artifact the JSON report is uploaded as, which a
+      summary too long for the comment points at. Empty writes no report.
+    default: steward-report
+  swift-version:
+    description: >-
+      On Linux, the Swift version to install with swiftly, such as 6.2 or
+      6.2.1, unless the runner's Swift is that version already. Empty uses
+      the runner's Swift, and installs the latest release only when there's
+      none. On macOS, the selected Xcode's Swift runs the rules.
+    default: ''
+
+outputs:
+  report:
+    description: >-
+      The path of the JSON report Steward wrote, also uploaded as the
+      report-artifact artifact. Empty when report-artifact is.
+    value: ${{ steps.run.outputs.report }}
+
+runs:
+  using: composite
+  steps:
+    - name: Check the event
+      if: github.event_name != 'pull_request'
+      shell: bash
+      run: |
+        echo "::error title=Steward::Steward runs on pull_request events, and this is a $GITHUB_EVENT_NAME event."
+        exit 2
+
+    - name: Set up Swift
+      id: swift
+      shell: bash
+      run: '"$GITHUB_ACTION_PATH/scripts/setup-swift.sh"'
+      env:
+        SWIFT_VERSION: ${{ inputs.swift-version }}
+
+    - name: Trust the workspace
+      shell: bash
+      run: '"$GITHUB_ACTION_PATH/scripts/trust-workspace.sh"'
+
+    - name: Fetch the pull request's history
+      shell: bash
+      working-directory: ${{ github.workspace }}
+      run: '"$GITHUB_ACTION_PATH/scripts/fetch-history.sh" "$BASE" "$HEAD" "$COMMITS"'
+      env:
+        BASE: ${{ github.event.pull_request.base.sha }}
+        HEAD: ${{ github.event.pull_request.head.sha }}
+        COMMITS: ${{ github.event.pull_request.commits }}
+
+    - name: Restore the Dangerfile's build
+      id: cache
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ inputs.package-path }}/.build
+        key: steward-${{ runner.os }}-${{ runner.arch }}-${{ steps.swift.outputs.key }}-${{ hashFiles(format('{0}/Package.resolved', inputs.package-path)) }}
+        restore-keys: steward-${{ runner.os }}-${{ runner.arch }}-${{ steps.swift.outputs.key }}-
+
+    - name: Build the Dangerfile
+      shell: bash
+      working-directory: ${{ github.workspace }}
+      run: swift build --package-path "$PACKAGE_PATH" --product "$PRODUCT"
+      env:
+        PACKAGE_PATH: ${{ inputs.package-path }}
+        PRODUCT: ${{ inputs.product }}
+
+    # Saved here, not by actions/cache's post step, which skips a job that
+    # failed, as it does whenever the rules find a failure.
+    - name: Save the Dangerfile's build
+      if: steps.cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ inputs.package-path }}/.build
+        key: ${{ steps.cache.outputs.cache-primary-key }}
+
+    - name: Run the Dangerfile
+      id: run
+      shell: bash
+      working-directory: ${{ github.workspace }}
+      run: '"$GITHUB_ACTION_PATH/scripts/run.sh"'
+      env:
+        PACKAGE_PATH: ${{ inputs.package-path }}
+        PRODUCT: ${{ inputs.product }}
+        GITHUB_TOKEN: ${{ inputs.token }}
+        DEFAULT_TOKEN: ${{ inputs.token == github.token }}
+        SUMMARY_AUTHOR: ${{ inputs.summary-author }}
+        FAIL_ON_POST_ERROR: ${{ inputs.fail-on-post-error }}
+        REPORT_ARTIFACT: ${{ inputs.report-artifact }}
+
+    - name: Upload the report
+      if: ${{ !cancelled() && steps.run.outputs.report != '' }}
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      with:
+        name: ${{ inputs.report-artifact }}
+        path: ${{ steps.run.outputs.report }}
+        if-no-files-found: ignore
+        overwrite: true
