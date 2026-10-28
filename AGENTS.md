@@ -70,3 +70,5 @@ delete comments, which notify.
 The maintainer tags releases. `v1` is a moving major tag, as GitHub
 recommends for actions, and it means "these inputs": it's independent of
 swift-steward's versions.
+Until the first, the README pins the Action by commit SHA; once `v1`
+exists, its two pins become `@v1`.

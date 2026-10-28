@@ -8,8 +8,9 @@ binary. The [quickstart](https://github.com/marosoaie/swift-steward/blob/main/do
 sets up the package; this Action runs it.
 
 **Not released yet.** No swift-steward release has Steward yet, so there's
-no `v1` tag here either. Until there is, use the quickstart's workflow
-without the Action.
+no `v1` tag here either. Until there is, pin the Action by the full SHA of
+a commit on its `main` branch, as the usage below does; a branch name
+would run whatever lands there next. Once `v1` exists, use `@v1` instead.
 
 ## Usage
 
@@ -35,7 +36,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: marosoaie/steward-action@v1
+      # No v1 tag yet: pinned to a commit of the Action's main branch.
+      - uses: marosoaie/steward-action@c606a4a637221b3d86c35e18c71aa4bbf6d9fecb
 ```
 
 With the package at `Dangerfile/` and its executable called `Dangerfile`,
@@ -175,7 +177,7 @@ steps:
   - name: Build
     shell: bash
     run: swift build --no-color-diagnostics 2>&1 | tee build.log
-  - uses: marosoaie/steward-action@v1
+  - uses: marosoaie/steward-action@c606a4a637221b3d86c35e18c71aa4bbf6d9fecb
     if: ${{ !cancelled() }}
 ```
 
