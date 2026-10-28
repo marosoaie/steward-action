@@ -167,16 +167,16 @@ Steward needs Swift 6.2 or later.
 
 Steward's built-in rule, `Rule.diagnosticsOnChangedLines(in:)`, reads
 build and lint logs that earlier steps of the same job wrote. Build before
-the Action, without colours, which Swift 6.4 writes even into a pipe and
-Steward can't read, and run the Action even when the build fails, so it
-reports a broken build's errors:
+the Action, and run it even when the build fails, so it reports a broken
+build's errors. Colours, which Swift 6.4 writes even into a pipe, are
+fine: Steward reads past them.
 
 ```yaml
 steps:
   - uses: actions/checkout@v7
   - name: Build
     shell: bash
-    run: swift build --no-color-diagnostics 2>&1 | tee build.log
+    run: swift build 2>&1 | tee build.log
   - uses: marosoaie/steward-action@c606a4a637221b3d86c35e18c71aa4bbf6d9fecb
     if: ${{ !cancelled() }}
 ```
