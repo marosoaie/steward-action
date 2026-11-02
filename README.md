@@ -155,7 +155,11 @@ private repository checked out with `persist-credentials: false`, use
   Action installs those with `sudo` when it can). The Action puts that
   toolchain itself on `PATH`, for the rest of the job too, so a
   `.swift-version` file in the repository doesn't send swiftly's `swift`
-  to another one.
+  to another one. Swift 6.4's `swift run` logs two warnings there before
+  Steward's output:
+  `safeExec: signal(32, SIG_DFL) failed: Invalid argument`, and the same
+  for 33. They're harmless: SwiftPM resets every signal's handler before
+  it starts the Dangerfile, and glibc keeps those two signals for itself.
 - **A container job** (`container: swift:6.2`) uses the image's Swift. The
   image needs `git`, so that `actions/checkout` makes a real checkout.
 - **macOS** (`macos-26`, as Steward needs macOS 26) uses the selected
