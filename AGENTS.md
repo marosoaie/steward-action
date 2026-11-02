@@ -33,8 +33,8 @@ binaries or Git LFS, and the maintainer choosing versions.
   `run:` script, so a value can't inject shell.
 - **Every input is documented in the README's table**, as `` `name` ``;
   the fixture Dangerfile checks that too. Input names and defaults are the
-  Action's API: the `v1` tag promises them, so renaming or removing one
-  needs a new major.
+  Action's API: renaming or removing one needs a new minor under 0.x, and
+  a new major from 1.0.
 - **Scripts** are bash with `set -euo pipefail`, run on macOS's bash 3.2
   too, and pass `shellcheck` with no exceptions. Mind the traps: a function
   called on the right of `||` runs with errexit off, and `cmd | grep -q`
@@ -67,8 +67,10 @@ delete comments, which notify.
 
 ## Releases
 
-The maintainer tags releases. `v1` is a moving major tag, as GitHub
-recommends for actions, and it means "these inputs": it's independent of
-swift-steward's versions.
-Until the first, the README pins the Action by commit SHA; once `v1`
-exists, its two pins become `@v1`.
+The maintainer tags releases, starting at `v0.1.0`; they're independent
+of swift-steward's versions. Under 0.x a minor release may break, so
+workflows pin an exact tag such as `@v0.1.0`, or a SHA. A moving major
+tag, `v1`, as GitHub recommends for actions, waits for 1.0; it will mean
+"these inputs".
+Until the first release, the README pins the Action by commit SHA; then
+its two pins become `@v0.1.0`.
