@@ -72,5 +72,5 @@ of swift-steward's versions. Under 0.x a minor release may break, so
 workflows pin an exact tag such as `@v0.1.0`, or a SHA. A moving major
 tag, `v1`, as GitHub recommends for actions, waits for 1.0; it will mean
 "these inputs".
-Until the first release, the README pins the Action by commit SHA; then
-its two pins become `@v0.1.0`.
+The README's two pins name the latest release's tag. A release moves them
+to its own tag before it's tagged, so each tag's README names that tag.
