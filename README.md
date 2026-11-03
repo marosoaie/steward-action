@@ -7,11 +7,9 @@ on every push. Steward is a pure-Swift Danger: the rules are Swift, in a
 binary. The [quickstart](https://github.com/marosoaie/swift-steward/blob/main/docs/quickstart.md)
 sets up the package; this Action runs it.
 
-**Not released yet.** Until the Action's first release, `v0.1.0`, pin it
-by the full SHA of a commit on its `main` branch, as the usage below does;
-a branch name would run whatever lands there next. Then pin an exact tag
-such as `@v0.1.0` (or a SHA): under 0.x a minor release may break. A
-moving `v1` tag waits for 1.0.
+**Versions.** Pin an exact tag, as the usage below does, or a full commit
+SHA: under 0.x a minor release may break, and a branch name would run
+whatever lands there next. A moving `v1` tag waits for 1.0.
 
 ## Usage
 
@@ -37,8 +35,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      # No release yet: pinned to a commit of the Action's main branch.
-      - uses: marosoaie/steward-action@c606a4a637221b3d86c35e18c71aa4bbf6d9fecb
+      - uses: marosoaie/steward-action@v0.1.0
 ```
 
 With the package at `Dangerfile/` and its executable called `Dangerfile`,
@@ -182,7 +179,7 @@ steps:
   - name: Build
     shell: bash
     run: swift build 2>&1 | tee build.log
-  - uses: marosoaie/steward-action@c606a4a637221b3d86c35e18c71aa4bbf6d9fecb
+  - uses: marosoaie/steward-action@v0.1.0
     if: ${{ !cancelled() }}
 ```
 
