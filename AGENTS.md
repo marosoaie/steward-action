@@ -43,8 +43,8 @@ binaries or Git LFS, and the maintainer choosing versions.
   6): don't write code to save time unless the time is large. The history
   step fetches everything rather than just enough.
 - **The Action doesn't pin Steward.** Each Dangerfile's `Package.resolved`
-  does; the fixture follows swift-steward's `main` until a release has
-  Steward, as swift-steward's template does.
+  does; the fixture depends on Steward 0.1.x, as swift-steward's template
+  does.
 - **Only one job per pull request posts at a time.** `steward.yml`'s
   `steward` job owns the summary comment, and the label-gated
   `pull-requests-write` check posts only after it, in the same run. Every
