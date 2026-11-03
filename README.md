@@ -7,10 +7,9 @@ on every push. Steward is a pure-Swift Danger: the rules are Swift, in a
 binary. The [quickstart](https://github.com/marosoaie/swift-steward/blob/main/docs/quickstart.md)
 sets up the package; this Action runs it.
 
-**Not released yet.** No swift-steward release has Steward yet, so this
-Action has no release either. Until its first, `v0.1.0`, pin the Action by
-the full SHA of a commit on its `main` branch, as the usage below does; a
-branch name would run whatever lands there next. Then pin an exact tag
+**Not released yet.** Until the Action's first release, `v0.1.0`, pin it
+by the full SHA of a commit on its `main` branch, as the usage below does;
+a branch name would run whatever lands there next. Then pin an exact tag
 such as `@v0.1.0` (or a SHA): under 0.x a minor release may break. A
 moving `v1` tag waits for 1.0.
 
