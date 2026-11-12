@@ -156,7 +156,10 @@ private repository checked out with `persist-credentials: false`, use
 
 - **Ubuntu.** GitHub's Ubuntu images have Swift preinstalled (6.4 in
   October 2026), which the Action uses unless `swift-version` asks for
-  another. A runner without Swift gets the latest release from swiftly,
+  another. `swift-version` needs a build for the runner's Ubuntu:
+  `ubuntu-latest` is Ubuntu 26.04, whose first Swift release is 6.4, so
+  an older Swift needs `runs-on: ubuntu-24.04` or a `swift` container.
+  A runner without Swift gets the latest release from swiftly,
   which needs `curl`, `gpg` and the toolchain's system packages (the
   Action installs those with `sudo` when it can). The Action puts that
   toolchain itself on `PATH`, for the rest of the job too, so a
