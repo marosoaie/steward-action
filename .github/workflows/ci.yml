@@ -36,6 +36,7 @@ jobs:
       # inputs of `uses: ./` against action.yml.
       - run: actionlint -color
       - run: shellcheck scripts/*.sh tests/*.sh
+      - run: tests/swift-version.sh
 
   dangerfile-tests:
     runs-on: ubuntu-latest

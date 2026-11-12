@@ -16,7 +16,9 @@ fail() {
     exit 1
 }
 
-[[ $version =~ ^[A-Za-z0-9._-]*$ ]] || fail "swift-version is a version such as 6.2 or 6.2.1, not \"$version\"."
+# It starts with a letter or digit: swiftly would read a leading `-` as an
+# option.
+[[ $version =~ ^([A-Za-z0-9][A-Za-z0-9._-]*)?$ ]] || fail "swift-version is a version such as 6.2 or 6.2.1, not \"$version\"."
 
 # Whether `swift` is on PATH, and is SWIFT_VERSION when that's set: 6.2
 # matches "Swift version 6.2.1 (swift-6.2.1-RELEASE)", and 6.2.0 matches
