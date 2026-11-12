@@ -29,6 +29,7 @@ binaries or Git LFS, and the maintainer choosing versions.
 - **Pin every action by full commit SHA**, with its version in a comment
   (`uses: actions/cache/restore@<sha> # v6.1.0`), in `action.yml` and the
   workflows. The fixture Dangerfile fails a pull request that doesn't.
+  Dependabot proposes new pins monthly, in one pull request.
 - **Inputs reach scripts through `env:`**, never as `${{ }}` inside a
   `run:` script, so a value can't inject shell.
 - **Every input is documented in the README's table**, as `` `name` ``;
@@ -56,6 +57,7 @@ binaries or Git LFS, and the maintainer choosing versions.
 ```sh
 actionlint                       # the workflows, and `uses: ./` inputs against action.yml
 shellcheck scripts/*.sh tests/*.sh
+tests/swift-version.sh           # the swift-version values setup-swift.sh accepts
 swift test --package-path Dangerfile
 ```
 
