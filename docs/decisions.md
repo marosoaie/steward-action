@@ -22,3 +22,4 @@ separate repository).
 | 10 | Fixture | This repository's own `Dangerfile/`, on swift-steward's `main` at the revision its `Package.resolved` pins, until a release has Steward; then `from:`. Since 0.1.0 (2026-11-03): `.upToNextMinor(from: "0.1.0")`, since a 0.x minor release may break | A separate test fixture; a revision pin in the manifest |
 | 11 | Permission checks | Behind the `check-permissions` label, since every probe's comment notifies | On every pull request |
 | 12 | Marketplace name | Decided later (step 5.3). `name: Steward` can't be listed, since `steward` is a GitHub user, and the name shouldn't say Swift: Steward checks projects in other languages too. The name doesn't affect `uses:` | |
+| 13 | Pin updates | Dependabot's `github-actions` updates, monthly, grouped into one pull request, for `action.yml` and the workflows (2026-11-12) | Moving the pins by hand |

@@ -77,6 +77,14 @@ updates summaries that account wrote, so without it, it finds none and
 posts a new one on every run; the Action warns when `token` isn't the
 workflow's and `summary-author` is empty.
 
+**The token is visible to the pull request's code.** The step that runs
+the Dangerfile, which is the pull request's code, gets `token` in its
+environment, so a pull request can read it. Give a token of your own only
+what a pull request's author may do: comment on this repository's pull
+requests, and nothing more. Steward's
+[security model](https://github.com/marosoaie/swift-steward/blob/main/docs/quickstart.md#security-model)
+has the rest.
+
 **Posting failures.** When posting fails, for a missing permission, an
 outage or a rate limit, Steward warns, and the findings alone decide the
 step's outcome; the job summary and the report have them either way.
@@ -148,7 +156,10 @@ private repository checked out with `persist-credentials: false`, use
 
 - **Ubuntu.** GitHub's Ubuntu images have Swift preinstalled (6.4 in
   October 2026), which the Action uses unless `swift-version` asks for
-  another. A runner without Swift gets the latest release from swiftly,
+  another. `swift-version` needs a build for the runner's Ubuntu:
+  `ubuntu-latest` is Ubuntu 26.04, whose first Swift release is 6.4, so
+  an older Swift needs `runs-on: ubuntu-24.04` or a `swift` container.
+  A runner without Swift gets the latest release from swiftly,
   which needs `curl`, `gpg` and the toolchain's system packages (the
   Action installs those with `sudo` when it can). The Action puts that
   toolchain itself on `PATH`, for the rest of the job too, so a
@@ -208,8 +219,10 @@ input documented here.
   Steward deleting a planted second summary), and that `issues: write`
   alone and `pull-requests: read` can't create one.
 - **CI** (`.github/workflows/ci.yml`) lints the workflows and scripts with
-  actionlint and ShellCheck, runs the fixture's tests, and runs the Action
+  actionlint and ShellCheck, checks which `swift-version` values the
+  setup script accepts, runs the fixture's tests, and runs the Action
   in a `swift:6.2` container, on macOS, with Swift 6.2 from swiftly, and
   with a token that can't post, with and without `fail-on-post-error`.
 
-[AGENTS.md](AGENTS.md) has the conventions.
+[AGENTS.md](AGENTS.md) has the conventions, and [SECURITY.md](SECURITY.md)
+what the Action guarantees and how to report a vulnerability.

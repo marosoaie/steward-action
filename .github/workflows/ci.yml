@@ -36,6 +36,7 @@ jobs:
       # inputs of `uses: ./` against action.yml.
       - run: actionlint -color
       - run: shellcheck scripts/*.sh tests/*.sh
+      - run: tests/swift-version.sh
 
   dangerfile-tests:
     runs-on: ubuntu-latest
@@ -77,7 +78,8 @@ jobs:
           report-artifact: steward-report-macos
 
   swiftly:
-    runs-on: ubuntu-latest
+    # swift.org builds Swift 6.2 for Ubuntu 24.04 but not for ubuntu-latest's 26.04.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./
