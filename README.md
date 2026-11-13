@@ -35,7 +35,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: marosoaie/steward-action@v0.1.0
+      - uses: marosoaie/steward-action@v0.1.1
 ```
 
 With the package at `Dangerfile/` and its executable called `Dangerfile`,
@@ -190,7 +190,7 @@ steps:
   - name: Build
     shell: bash
     run: swift build 2>&1 | tee build.log
-  - uses: marosoaie/steward-action@v0.1.0
+  - uses: marosoaie/steward-action@v0.1.1
     if: ${{ !cancelled() }}
 ```
 
