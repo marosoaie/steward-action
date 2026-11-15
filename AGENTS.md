@@ -44,7 +44,7 @@ binaries or Git LFS, and the maintainer choosing versions.
   6): don't write code to save time unless the time is large. The history
   step fetches everything rather than just enough.
 - **The Action doesn't pin Steward.** Each Dangerfile's `Package.resolved`
-  does; the fixture depends on Steward 0.1.x, as swift-steward's template
+  does; the fixture depends on Steward 0.2.x, as swift-steward's template
   does.
 - **Only one job per pull request posts at a time.** `steward.yml`'s
   `steward` job owns the summary comment, and the label-gated
@@ -71,7 +71,7 @@ delete comments, which notify.
 
 The maintainer tags releases, starting at `v0.1.0`; they're independent
 of swift-steward's versions. Under 0.x a minor release may break, so
-workflows pin an exact tag such as `@v0.1.0`, or a SHA. A moving major
+workflows pin an exact tag such as `@v0.1.1`, or a SHA. A moving major
 tag, `v1`, as GitHub recommends for actions, waits for 1.0; it will mean
 "these inputs".
 The README's two pins name the latest release's tag. A release moves them
