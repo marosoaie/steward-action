@@ -133,9 +133,10 @@ runs:
     # it crashed or exited with Steward's 2, or an earlier step failed. This
     # replaces it with one saying Steward didn't finish. The job has failed
     # already, so the step can't change its outcome, and a failure to post
-    # is a warning.
+    # is a warning. A skipped step's output is null, which an expression
+    # compares with '0' as a number, 0, so `format` makes it '' first.
     - name: Replace the summary comment
-      if: ${{ !cancelled() && github.event_name == 'pull_request' && inputs.token != '' && steps.run.outputs.status != '0' && steps.run.outputs.status != '1' }}
+      if: ${{ !cancelled() && github.event_name == 'pull_request' && inputs.token != '' && format('{0}', steps.run.outputs.status) != '0' && format('{0}', steps.run.outputs.status) != '1' }}
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
         SCRIPT: ${{ github.action_path }}/scripts/crash-comment.js
