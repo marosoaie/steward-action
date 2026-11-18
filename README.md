@@ -55,6 +55,9 @@ as the template has them, it needs no `with:`. The Action:
    which fails the step.
 7. Uploads Steward's JSON report as an artifact, which a summary too long
    for the comment points at.
+8. When the Dangerfile didn't build, or ended without having reported,
+   replaces the summary comment with one that says so (see
+   [When the Dangerfile doesn't finish](#when-the-dangerfile-doesnt-finish)).
 
 ## Inputs
 
@@ -89,6 +92,46 @@ has the rest.
 outage or a rate limit, Steward warns, and the findings alone decide the
 step's outcome; the job summary and the report have them either way.
 `fail-on-post-error: true` makes a failed post fail the step instead.
+
+## When the Dangerfile doesn't finish
+
+Posting the summary is Steward's last act. When the Dangerfile doesn't
+build, or ends with a status other than 0 or 1 (a crash, another signal,
+or Steward's 2, for a run it couldn't complete), there's no summary for
+the commit, and the comment from an earlier push would read as current
+beside the red check. So the Action replaces it with this:
+
+> **Steward didn't finish** on 4c95447: the Dangerfile didn't build.
+>
+> This commit hasn't been checked. The [workflow run](#) has the log.
+
+The reason is one of:
+
+- the Dangerfile didn't build
+- the Dangerfile was stopped by SIGILL (status 132), or another signal: a
+  crash traps with SIGILL on x86-64 and SIGTRAP on arm64
+- the Dangerfile exited with status 2, Steward's for a run it couldn't
+  complete
+- the Dangerfile exited with status *n*, for any other status
+- the step that runs the Dangerfile ended without an exit status, as when
+  it times out
+
+It finds the comment as Steward does, by `summary-author` and the hidden
+first line, and keeps that line, so the next run that reports updates the
+same comment. With no summary comment yet, it posts one. It writes
+nothing when:
+
+- the job was cancelled, or `token` is empty;
+- the pull request's head has moved on: the newer commit's run posts;
+- the summary comment was written after the run started building the
+  Dangerfile, as when Steward posted it and then exited with 2. That start
+  is on the runner's clock, which GitHub's runners keep in time.
+
+The step runs `scripts/crash-comment.js` with
+[actions/github-script](https://github.com/actions/github-script), on the
+node every runner has for actions: a `swift` container has no `curl` or
+`jq`. The job has failed already, so it can't change the outcome, and when
+it can't post, with a read-only token such as a fork's, it warns.
 
 ## Permissions
 
@@ -217,12 +260,20 @@ input documented here.
   label, from the next push or edit on, it also checks what the workflow's token can do with comments
   under `pull-requests: write` alone (create, update and delete, and
   Steward deleting a planted second summary), and that `issues: write`
-  alone and `pull-requests: read` can't create one.
+  alone and `pull-requests: read` can't create one. Then it runs the
+  Action on `tests/unfinished`, Dangerfiles that crash, exit with 2, don't
+  build, and post before exiting with 2, and checks what each leaves in the
+  summary comment, that a run whose head moved on writes nothing, and that
+  the next run that reports updates the same comment.
 - **CI** (`.github/workflows/ci.yml`) lints the workflows and scripts with
   actionlint and ShellCheck, checks which `swift-version` values the
-  setup script accepts, runs the fixture's tests, and runs the Action
-  in a `swift:6.2` container, on macOS, with Swift 6.2 from swiftly, and
-  with a token that can't post, with and without `fail-on-post-error`.
+  setup script accepts, runs the fixture's tests and
+  `scripts/crash-comment.js`'s (`node --test tests/*.test.js`), and runs
+  the Action in a `swift:6.2` container, on macOS, with Swift 6.2 from
+  swiftly, and with a token that can't post, with and without
+  `fail-on-post-error`. In the container and with that token, it also
+  runs a Dangerfile that crashes, and checks that replacing the comment
+  only warns.
 
 [AGENTS.md](AGENTS.md) has the conventions, and [SECURITY.md](SECURITY.md)
 what the Action guarantees and how to report a vulnerability.
