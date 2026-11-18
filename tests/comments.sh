@@ -11,12 +11,27 @@
 #       the newer one's id to GITHUB_OUTPUT as `id`.
 #   comments.sh gone <id>
 #       Checks that the comment is deleted and one summary comment is left.
+#   comments.sh says <text>...
+#       Checks that the oldest summary comment holds each text, and, when
+#       ID is set, that its id is that. Writes its id and the time it was
+#       last written to GITHUB_OUTPUT, as `id` and `updated`.
+#   comments.sh clear
+#       Deletes every summary comment, so the next one is created.
+#   comments.sh touch
+#       Rewrites the oldest summary comment, or posts one, as Steward posting
+#       would; run by the Dangerfile tests/unfinished's STOP=touch.
+#   comments.sh kept <id> <updated>
+#       Checks that one summary comment is left, the one with this id, that
+#       it was written after <updated>, and that it says neither that
+#       Steward didn't finish nor what `touch` planted.
 #
 # Needs GITHUB_TOKEN, PULL_REQUEST, the variables Actions sets, and gh.
 set -euo pipefail
 
 marker='<!-- steward-summary -->'
+planted="Planted by a Dangerfile that then exits with 2, as Steward does when it posts and then can't finish."
 response=$(mktemp)
+list=$(mktemp)
 
 # Prints the status of a request to the repository's API, and keeps the
 # response's body in $response.
@@ -43,6 +58,15 @@ body() {
     jq -n --arg body "$1" '{body: $body}'
 }
 
+# Lists the summary comments in $list, oldest first, one JSON object a line,
+# from every page, as Steward reads them. A file, not a pipe into `head`,
+# which under pipefail can fail on SIGPIPE.
+summaries() {
+    GH_TOKEN=$GITHUB_TOKEN gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PULL_REQUEST/comments?per_page=100" \
+        --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$marker\"))) | {id, body, updated_at}" \
+        >"$list"
+}
+
 case $1 in
 probe)
     status=$(api POST "issues/$PULL_REQUEST/comments" --data "$(body "A permissions probe, deleted right away.")")
@@ -66,13 +90,69 @@ A summary comment planted for Steward to keep, if it's the oldest, or delete.")"
     ;;
 gone)
     expect "Reading the planted summary" 404 "$(api GET "issues/comments/$2")"
-    # Every page, as Steward reads them.
-    summaries=$(GH_TOKEN=$GITHUB_TOKEN gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PULL_REQUEST/comments?per_page=100" \
-        --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$marker\"))) | .id" | wc -l)
-    expect "Summary comments left" 1 "$((summaries))"
+    summaries
+    expect "Summary comments left" 1 "$(($(wc -l <"$list")))"
+    ;;
+says)
+    shift
+    summaries
+    oldest=$(head -n 1 "$list")
+    if [ -z "$oldest" ]; then
+        echo "::error::The pull request has no summary comment."
+        exit 1
+    fi
+    text=$(jq -r .body <<<"$oldest")
+    echo "$text"
+    for expected in "$@"; do
+        if [[ $text != *"$expected"* ]]; then
+            echo "::error::The summary comment doesn't say \"$expected\"."
+            exit 1
+        fi
+    done
+    id=$(jq -r .id <<<"$oldest")
+    updated=$(jq -r .updated_at <<<"$oldest")
+    expect "The summary comment's id" "${ID:-$id}" "$id"
+    printf 'id=%s\nupdated=%s\n' "$id" "$updated" >>"$GITHUB_OUTPUT"
+    ;;
+clear)
+    summaries
+    while read -r id; do
+        expect "Deleting the summary $id" 204 "$(api DELETE "issues/comments/$id")"
+    done < <(jq -r .id <"$list")
+    ;;
+touch)
+    summaries
+    id=$(head -n 1 "$list" | jq -r .id)
+    summary=$(body "$marker
+$planted")
+    if [ -n "$id" ]; then
+        expect "Rewriting the summary" 200 "$(api PATCH "issues/comments/$id" --data "$summary")"
+    else
+        expect "Posting a summary" 201 "$(api POST "issues/$PULL_REQUEST/comments" --data "$summary")"
+    fi
+    ;;
+kept)
+    summaries
+    expect "Summary comments left" 1 "$(($(wc -l <"$list")))"
+    expect "The summary comment's id" "$2" "$(jq -r .id <"$list")"
+    text=$(jq -r .body <"$list")
+    updated=$(jq -r .updated_at <"$list")
+    echo "$text"
+    echo "Last written at $updated, after $3?"
+    # ISO 8601 times in UTC sort as strings.
+    if [[ ! $updated > $3 ]]; then
+        echo "::error::The summary comment wasn't written since $3."
+        exit 1
+    fi
+    for stale in "Steward didn't finish" "$planted"; do
+        if [[ $text == *"$stale"* ]]; then
+            echo "::error::The summary comment still says \"$stale\"."
+            exit 1
+        fi
+    done
     ;;
 *)
-    echo "Usage: comments.sh probe allowed|forbidden | plant | gone <id>" >&2
+    echo "Usage: comments.sh probe allowed|forbidden | plant | gone <id> | says <text>... | clear | touch | kept <id> <updated>" >&2
     exit 2
     ;;
 esac

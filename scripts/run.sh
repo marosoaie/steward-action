@@ -4,6 +4,9 @@
 # `report`, the path of the report it asks Steward for, to GITHUB_OUTPUT
 # first, so a failing run's report is still uploaded. The path is new for
 # every run, so a second run in the job never uploads the first one's.
+# Then writes `started`, the time it starts the product in seconds since
+# the epoch, and once it's done, `status`, its exit status, which tells a
+# run that reported (0 or 1) from one that ended first.
 set -euo pipefail
 
 arguments=()
@@ -28,5 +31,11 @@ it posts as. Without it, Steward looks for summaries by github-actions[bot], fin
 one on every run."
 fi
 
+echo "started=$(date -u +%s)" >>"$GITHUB_OUTPUT"
+# Not `exec`, so the status can be written. A cancelled job's signal goes to
+# the step's own shell, whose child this script is, either way.
+status=0
 # The `+` form: bash 3.2, macOS's own, calls an empty array unbound.
-exec swift run --skip-build --package-path "$PACKAGE_PATH" "$PRODUCT" ${arguments[@]+"${arguments[@]}"}
+swift run --skip-build --package-path "$PACKAGE_PATH" "$PRODUCT" ${arguments[@]+"${arguments[@]}"} || status=$?
+echo "status=$status" >>"$GITHUB_OUTPUT"
+exit "$status"

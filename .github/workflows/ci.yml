@@ -37,6 +37,7 @@ jobs:
       - run: actionlint -color
       - run: shellcheck scripts/*.sh tests/*.sh
       - run: tests/swift-version.sh
+      - run: node --test tests/*.test.js
 
   dangerfile-tests:
     runs-on: ubuntu-latest
@@ -67,6 +68,42 @@ jobs:
         with:
           token: ''
           report-artifact: steward-report-container
+      # A Dangerfile that crashes, with a token that can read the pull
+      # request but not comment: the Action's step that replaces the summary
+      # comment runs, warns, and leaves the outcome a failure. The image has
+      # no curl or jq; the script runs on the runner's node.
+      - id: crash
+        uses: ./
+        continue-on-error: true
+        env:
+          STOP: crash
+        with:
+          token: ${{ github.token }}
+          package-path: tests/unfinished
+          product: Stops
+          report-artifact: steward-report-container-crash
+      # The script as the Action runs it, with its path given on the
+      # runner's side, as `github.action_path` is.
+      - id: replace
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          SCRIPT: ${{ github.workspace }}/scripts/crash-comment.js
+          PULL_REQUEST: ${{ github.event.pull_request.number }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+          BUILD: failure
+          STATUS: ''
+          STARTED: ''
+          SUMMARY_AUTHOR: ''
+        with:
+          result-encoding: string
+          script: return await require(process.env.SCRIPT)({ github, core })
+      - name: Check the outcomes
+        run: |
+          echo "crash: $CRASH (expected failure); replacing the comment: $RESULT (expected failed)"
+          [ "$CRASH" = failure ] && [ "$RESULT" = failed ]
+        env:
+          CRASH: ${{ steps.crash.outcome }}
+          RESULT: ${{ steps.replace.outputs.result }}
 
   macos:
     runs-on: macos-26
@@ -76,6 +113,22 @@ jobs:
         with:
           token: ''
           report-artifact: steward-report-macos
+      # run.sh's start stamp with BSD date and bash 3.2, and the step that
+      # replaces the summary comment, which warns: this job's token can't
+      # post.
+      - id: crash
+        uses: ./
+        continue-on-error: true
+        env:
+          STOP: crash
+        with:
+          package-path: tests/unfinished
+          product: Stops
+          report-artifact: steward-report-macos-crash
+      - name: Check that the crash failed the step
+        run: test "$CRASH" = failure
+        env:
+          CRASH: ${{ steps.crash.outcome }}
 
   swiftly:
     # swift.org builds Swift 6.2 for Ubuntu 24.04 but not for ubuntu-latest's 26.04.
@@ -98,7 +151,9 @@ jobs:
   # With a read-only token, posting fails with a warning, and the findings
   # decide the outcome; with fail-on-post-error, a post that can't happen
   # fails the step. On a fork's pull request, Steward doesn't post at all,
-  # so there the findings decide both.
+  # so there the findings decide both. A Dangerfile that crashes fails the
+  # step, and replacing the summary comment then only warns; for a head
+  # that moved on, it writes nothing.
   posting-failure:
     runs-on: ubuntu-latest
     permissions:
@@ -118,6 +173,44 @@ jobs:
           token: ''
           fail-on-post-error: true
           report-artifact: steward-report-strict
+      - id: crash
+        uses: ./
+        continue-on-error: true
+        env:
+          STOP: crash
+        with:
+          package-path: tests/unfinished
+          product: Stops
+          report-artifact: steward-report-read-only-crash
+      # The script as the Action runs it: it tries to write, and can't.
+      - id: replace
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          SCRIPT: ${{ github.workspace }}/scripts/crash-comment.js
+          PULL_REQUEST: ${{ github.event.pull_request.number }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+          BUILD: failure
+          STATUS: ''
+          STARTED: ''
+          SUMMARY_AUTHOR: ''
+        with:
+          result-encoding: string
+          script: return await require(process.env.SCRIPT)({ github, core })
+      # For a run whose commit is no longer the head, which the base commit
+      # stands in for: it stops before writing, which would fail.
+      - id: moved
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          SCRIPT: ${{ github.workspace }}/scripts/crash-comment.js
+          PULL_REQUEST: ${{ github.event.pull_request.number }}
+          HEAD: ${{ github.event.pull_request.base.sha }}
+          BUILD: failure
+          STATUS: ''
+          STARTED: ''
+          SUMMARY_AUTHOR: ''
+        with:
+          result-encoding: string
+          script: return await require(process.env.SCRIPT)({ github, core })
       - name: Check the outcomes
         run: |
           failures=$(jq '[.findings[] | select(.kind == "failure")] | length' "$REPORT")
@@ -127,9 +220,14 @@ jobs:
           [ "$READ_ONLY" = "$expected" ] && [ "$STRICT" = "$strict" ]
           echo "reports: $REPORT, $STRICT_REPORT"
           [ "$REPORT" != "$STRICT_REPORT" ]
+          echo "crash: $CRASH (expected failure); replacing the comment: $RESULT (expected failed); moved head: $MOVED (expected stale)"
+          [ "$CRASH" = failure ] && [ "$RESULT" = failed ] && [ "$MOVED" = stale ]
         env:
           REPORT: ${{ steps.read-only.outputs.report }}
           STRICT_REPORT: ${{ steps.strict.outputs.report }}
           READ_ONLY: ${{ steps.read-only.outcome }}
           STRICT: ${{ steps.strict.outcome }}
           FORK: ${{ github.event.pull_request.head.repo.full_name != github.repository }}
+          CRASH: ${{ steps.crash.outcome }}
+          RESULT: ${{ steps.replace.outputs.result }}
+          MOVED: ${{ steps.moved.outputs.result }}

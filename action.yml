@@ -88,6 +88,7 @@ runs:
         restore-keys: steward-${{ runner.os }}-${{ runner.arch }}-${{ steps.swift.outputs.key }}-
 
     - name: Build the Dangerfile
+      id: build
       shell: bash
       working-directory: ${{ github.workspace }}
       run: swift build --package-path "$PACKAGE_PATH" --product "$PRODUCT"
@@ -126,3 +127,26 @@ runs:
         path: ${{ steps.run.outputs.report }}
         if-no-files-found: ignore
         overwrite: true
+
+    # Unless the Dangerfile ended with 0 or 1, having reported, the summary
+    # comment from an earlier push would read as current: it didn't build,
+    # it crashed or exited with Steward's 2, or an earlier step failed. This
+    # replaces it with one saying Steward didn't finish. The job has failed
+    # already, so the step can't change its outcome, and a failure to post
+    # is a warning. A skipped step's output is null, which an expression
+    # compares with '0' as a number, 0, so `format` makes it '' first.
+    - name: Replace the summary comment
+      if: ${{ !cancelled() && github.event_name == 'pull_request' && inputs.token != '' && format('{0}', steps.run.outputs.status) != '0' && format('{0}', steps.run.outputs.status) != '1' }}
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+      env:
+        SCRIPT: ${{ github.action_path }}/scripts/crash-comment.js
+        PULL_REQUEST: ${{ github.event.pull_request.number }}
+        HEAD: ${{ github.event.pull_request.head.sha }}
+        BUILD: ${{ steps.build.outcome }}
+        STATUS: ${{ steps.run.outputs.status }}
+        STARTED: ${{ steps.run.outputs.started }}
+        SUMMARY_AUTHOR: ${{ inputs.summary-author }}
+      with:
+        github-token: ${{ inputs.token }}
+        result-encoding: string
+        script: return await require(process.env.SCRIPT)({ github, core })

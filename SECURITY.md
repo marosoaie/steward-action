@@ -15,8 +15,13 @@ anything the workflow didn't ask for.
 - **What it installs is verified.** It checks swiftly's download against
   swift.org's signing keys before running it, and swiftly verifies the
   toolchains it installs.
-- **The token goes to one step.** Only the step that runs the
-  Dangerfile gets `token` in its environment.
+- **The token goes to two steps.** The step that runs the Dangerfile
+  gets `token` in its environment, and so does the one that replaces the
+  summary comment when the Dangerfile didn't finish. That one runs after
+  the Dangerfile, as the report's upload does, with the same token, so a
+  pull request gains nothing from it. Its comment is fixed text: of the
+  pull request, only the head commit's SHA goes into it, checked to be
+  one.
 
 ## What the Action doesn't protect against
 
