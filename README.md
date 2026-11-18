@@ -266,17 +266,19 @@ input documented here.
   alone and `pull-requests: read` can't create one. Then it runs the
   Action on `tests/unfinished`, Dangerfiles that crash, exit with 2, don't
   build, and post before exiting with 2, and checks what each leaves in the
-  summary comment, that a run whose head moved on writes nothing, and that
-  the next run that reports updates the same comment.
+  summary comment, and that the next run that reports updates the same
+  comment.
 - **CI** (`.github/workflows/ci.yml`) lints the workflows and scripts with
   actionlint and ShellCheck, checks which `swift-version` values the
   setup script accepts, runs the fixture's tests and
   `scripts/crash-comment.js`'s (`node --test tests/*.test.js`), and runs
   the Action in a `swift:6.2` container, on macOS, with Swift 6.2 from
   swiftly, and with a token that can't post, with and without
-  `fail-on-post-error`. In the container and with that token, it also
-  runs a Dangerfile that crashes, and checks that replacing the comment
-  only warns.
+  `fail-on-post-error`. In the container, on macOS and with that token, it
+  also runs a Dangerfile that crashes and checks that the step fails; in
+  the container and with that token, it runs the script that replaces the
+  comment directly and checks that it only warns, and, with that token,
+  that for a head that moved on it writes nothing.
 
 [AGENTS.md](AGENTS.md) has the conventions, and [SECURITY.md](SECURITY.md)
 what the Action guarantees and how to report a vulnerability.

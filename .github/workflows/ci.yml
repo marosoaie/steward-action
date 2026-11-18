@@ -113,6 +113,22 @@ jobs:
         with:
           token: ''
           report-artifact: steward-report-macos
+      # run.sh's start stamp with BSD date and bash 3.2, and the step that
+      # replaces the summary comment, which warns: this job's token can't
+      # post.
+      - id: crash
+        uses: ./
+        continue-on-error: true
+        env:
+          STOP: crash
+        with:
+          package-path: tests/unfinished
+          product: Stops
+          report-artifact: steward-report-macos-crash
+      - name: Check that the crash failed the step
+        run: test "$CRASH" = failure
+        env:
+          CRASH: ${{ steps.crash.outcome }}
 
   swiftly:
     # swift.org builds Swift 6.2 for Ubuntu 24.04 but not for ubuntu-latest's 26.04.

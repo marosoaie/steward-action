@@ -131,6 +131,10 @@ jobs:
           tests/comments.sh says "Steward didn't finish** on ${COMMIT:0:7}:" "the Dangerfile was stopped by SIG"
         env:
           OUTCOME: ${{ steps.crash.outcome }}
+      # The next run takes its Dangerfile's start on GitHub's clock, which
+      # can read up to about three seconds early, and leaves alone a comment
+      # written since: back to back, the crash's comment could count.
+      - run: sleep 5
 
       - id: broken
         uses: ./
@@ -175,6 +179,7 @@ jobs:
           product: Stops
           report-artifact: steward-report-touched
       - name: Check that a comment written during the run is left alone
+        id: planted
         run: |
           test "$OUTCOME" = failure
           tests/comments.sh says "Planted by a Dangerfile"
@@ -191,6 +196,7 @@ jobs:
         with:
           report-artifact: steward-report-unfinished
       - name: Check that Steward replaced the same comment
-        run: tests/comments.sh kept "$ID"
+        run: tests/comments.sh kept "$ID" "$UPDATED"
         env:
           ID: ${{ steps.crashed.outputs.id }}
+          UPDATED: ${{ steps.planted.outputs.updated }}
