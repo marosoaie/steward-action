@@ -55,8 +55,8 @@ as the template has them, it needs no `with:`. The Action:
    which fails the step.
 7. Uploads Steward's JSON report as an artifact, which a summary too long
    for the comment points at.
-8. When the Dangerfile didn't build, or ended without having reported,
-   replaces the summary comment with one that says so (see
+8. Unless the Dangerfile ended with 0 or 1, having reported, replaces the
+   summary comment with one that says Steward didn't finish (see
    [When the Dangerfile doesn't finish](#when-the-dangerfile-doesnt-finish)).
 
 ## Inputs
@@ -96,10 +96,11 @@ step's outcome; the job summary and the report have them either way.
 ## When the Dangerfile doesn't finish
 
 Posting the summary is Steward's last act. When the Dangerfile doesn't
-build, or ends with a status other than 0 or 1 (a crash, another signal,
-or Steward's 2, for a run it couldn't complete), there's no summary for
-the commit, and the comment from an earlier push would read as current
-beside the red check. So the Action replaces it with this:
+build, ends with a status other than 0 or 1 (a crash, another signal, or
+Steward's 2, for a run it couldn't complete), or never runs because an
+earlier step failed, there's no summary for the commit, and the comment
+from an earlier push would read as current beside the red check. So the
+Action replaces it with this:
 
 > **Steward didn't finish** on 4c95447: the Dangerfile didn't build.
 >
@@ -113,19 +114,21 @@ The reason is one of:
 - the Dangerfile exited with status 2, Steward's for a run it couldn't
   complete
 - the Dangerfile exited with status *n*, for any other status
-- the step that runs the Dangerfile ended without an exit status, as when
-  it times out
+- the Action stopped before the Dangerfile ran
 
 It finds the comment as Steward does, by `summary-author` and the hidden
 first line, and keeps that line, so the next run that reports updates the
 same comment. With no summary comment yet, it posts one. It writes
 nothing when:
 
-- the job was cancelled, or `token` is empty;
+- the job was cancelled, or `token` is empty. A job that reaches its
+  `timeout-minutes` counts as cancelled too, so its comment stays as it
+  was until the next run;
 - the pull request's head has moved on: the newer commit's run posts;
-- the summary comment was written after the run started building the
-  Dangerfile, as when Steward posted it and then exited with 2. That start
-  is on the runner's clock, which GitHub's runners keep in time.
+- a summary comment was written since the Dangerfile started, as when
+  Steward posted and then exited with 2. The start is taken on the
+  runner's clock and compared on GitHub's, so a runner whose clock is off
+  doesn't change the answer.
 
 The step runs `scripts/crash-comment.js` with
 [actions/github-script](https://github.com/actions/github-script), on the

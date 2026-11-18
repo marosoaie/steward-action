@@ -1,21 +1,23 @@
 // Replaces a pull request's summary comment when the Dangerfile didn't
-// build, or ended without having reported, so that an earlier push's
-// summary doesn't read as current beside a red check. action.yml runs it
-// with actions/github-script, which has no curl or jq to need: a swift
-// container has neither. Returns what it did, the step's `result`.
+// finish, so that an earlier push's summary doesn't read as current beside
+// a red check. action.yml runs it with actions/github-script, which needs
+// no curl or jq: a swift container has neither. Returns what it did, the
+// step's `result`.
 //
 // It finds the comment as Steward does: the oldest one by SUMMARY_AUTHOR
 // (github-actions[bot] when that's empty) whose first line is the marker,
 // through every page, and keeps the marker so the next run updates the same
-// comment. It writes nothing when that comment was written at or after
-// STARTED, since Steward may have posted and then exited with 2, nor when
-// the pull request's head is no longer HEAD: a newer run will post. A
-// failure is a warning. Nothing from the pull request goes into the text
-// but HEAD, checked to be a SHA.
+// comment. It writes nothing when the pull request's head is no longer
+// HEAD, since a newer run will post, nor when a summary comment was written
+// since the Dangerfile started, since Steward may have posted and then
+// exited with 2. A failure is a warning. Nothing from the pull request goes
+// into the text but HEAD, checked to be a SHA.
 //
 // Reads PULL_REQUEST, HEAD, BUILD (the build step's outcome), STATUS (the
-// Dangerfile's exit status), STARTED and SUMMARY_AUTHOR, and Actions'
-// GITHUB_SERVER_URL, GITHUB_REPOSITORY and GITHUB_RUN_ID.
+// Dangerfile's exit status, empty when it didn't run), STARTED (when it
+// started, in seconds since the epoch, empty when it didn't) and
+// SUMMARY_AUTHOR, and Actions' GITHUB_SERVER_URL, GITHUB_REPOSITORY and
+// GITHUB_RUN_ID.
 'use strict'
 
 const os = require('node:os')
@@ -26,7 +28,7 @@ const marker = '<!-- steward-summary -->'
 const formats = {
   PULL_REQUEST: /^[1-9][0-9]*$/,
   HEAD: /^([0-9a-f]{40}|[0-9a-f]{64})$/i,
-  STARTED: /^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$/,
+  STARTED: /^([0-9]+)?$/,
   GITHUB_SERVER_URL: /^https?:\/\/[^\s()<>[\]]+$/,
   GITHUB_REPOSITORY: /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/,
   GITHUB_RUN_ID: /^[0-9]+$/
@@ -35,7 +37,7 @@ const formats = {
 // Why the run didn't report, as the end of a sentence.
 function reason (build, status) {
   if (build === 'failure') return "the Dangerfile didn't build"
-  if (!/^[0-9]+$/.test(status)) return 'the step that runs the Dangerfile ended without an exit status'
+  if (!/^[0-9]+$/.test(status)) return 'the Action stopped before the Dangerfile ran'
   const code = Number(status)
   if (code === 2) return "the Dangerfile exited with status 2, Steward's for a run it couldn't complete"
   // A shell reports a process a signal stopped as 128 plus its number.
@@ -61,7 +63,18 @@ function isSummary (comment, author) {
   return firstLine === marker && (comment.user?.login ?? '').toLowerCase() === author.toLowerCase()
 }
 
-module.exports = async ({ github, core, env = process.env }) => {
+// When the Dangerfile started, on GitHub's clock: GitHub's time now, from
+// the `Date` header of `response`, less the time since `started` on the
+// runner's clock, so the runner's offset cancels out. Both are cut to whole
+// seconds, which only makes it earlier, so more comments count as newer.
+// Without the header, the runner's clock.
+function start (started, response, now) {
+  const github = Date.parse(response.headers?.date ?? '')
+  const runner = now()
+  return (Number.isNaN(github) ? runner : github) - (runner - Number(started) * 1000)
+}
+
+module.exports = async ({ github, core, env = process.env, now = Date.now }) => {
   const invalid = Object.keys(formats).filter(name => !formats[name].test(env[name] ?? ''))
   if (invalid.length > 0) {
     core.warning(`Steward didn't finish, but ${invalid.join(', ')} isn't set as expected, so the summary comment is left as it is.`, { title: 'Steward' })
@@ -73,19 +86,24 @@ module.exports = async ({ github, core, env = process.env }) => {
   const body = `${marker}\n${text(env)}`
   try {
     const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number: number, per_page: 100 })
-    const summary = comments.find(comment => isSummary(comment, author))
-    if (summary && Date.parse(summary.updated_at) >= Date.parse(env.STARTED)) {
-      core.info(`The summary comment ${summary.html_url} was written after this run started, so it's left as it is.`)
-      return 'newer'
-    }
-    const { data: pull } = await github.rest.pulls.get({ owner, repo, pull_number: number })
-    if (pull.head.sha.toLowerCase() !== env.HEAD.toLowerCase()) {
-      core.info(`The pull request's head is ${pull.head.sha} now, not ${env.HEAD}, so the run for the newer commit posts the summary.`)
+    const summaries = comments.filter(comment => isSummary(comment, author))
+    const pull = await github.rest.pulls.get({ owner, repo, pull_number: number })
+    if (pull.data.head.sha.toLowerCase() !== env.HEAD.toLowerCase()) {
+      core.info(`The pull request's head is ${pull.data.head.sha} now, not ${env.HEAD}, so the run for the newer commit posts the summary.`)
       return 'stale'
     }
-    if (summary) {
+    // Any of them: Steward posts a new one when the oldest was deleted.
+    if (env.STARTED) {
+      const started = start(env.STARTED, pull, now)
+      const newer = summaries.find(comment => Date.parse(comment.updated_at) >= started)
+      if (newer) {
+        core.info(`The summary comment ${newer.html_url} was written since the Dangerfile started, so it's left as it is.`)
+        return 'left'
+      }
+    }
+    if (summaries.length > 0) {
       try {
-        const { data } = await github.rest.issues.updateComment({ owner, repo, comment_id: summary.id, body })
+        const { data } = await github.rest.issues.updateComment({ owner, repo, comment_id: summaries[0].id, body })
         core.info(`Replaced the summary comment: ${data.html_url}`)
         return 'updated'
       } catch (error) {

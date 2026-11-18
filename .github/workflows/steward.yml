@@ -96,7 +96,8 @@ jobs:
   # Dangerfile doesn't finish"). It posts, so it runs as the permission
   # checks do: with the label, on this repository's own pull requests, and
   # after them. Each run's outcome must be failure, the job's status
-  # without continue-on-error.
+  # without continue-on-error. ci.yml checks what needs no write on every
+  # pull request.
   unfinished:
     needs: pull-requests-write
     if: ${{ !cancelled() && contains(github.event.pull_request.labels.*.name, 'check-permissions') && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' }}
@@ -110,6 +111,10 @@ jobs:
       COMMIT: ${{ github.event.pull_request.head.sha }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # So that the crash creates the summary comment.
+      - name: Delete the summary comment
+        run: tests/comments.sh clear
+
       - id: crash
         uses: ./
         continue-on-error: true
@@ -137,7 +142,6 @@ jobs:
           product: Stops
           report-artifact: steward-report-broken
       - name: Check the comment a broken run leaves
-        id: exited
         run: |
           test "$OUTCOME" = failure
           tests/comments.sh says "on ${COMMIT:0:7}: the Dangerfile exited with status 2,"
@@ -171,7 +175,6 @@ jobs:
           product: Stops
           report-artifact: steward-report-touched
       - name: Check that a comment written during the run is left alone
-        id: planted
         run: |
           test "$OUTCOME" = failure
           tests/comments.sh says "Planted by a Dangerfile"
@@ -179,33 +182,11 @@ jobs:
           OUTCOME: ${{ steps.touched.outcome }}
           ID: ${{ steps.crashed.outputs.id }}
 
-      # The script as the Action runs it, for a run whose commit is no
-      # longer the head: the base commit stands in for it, and any comment
-      # counts as written before the run started.
-      - id: moved
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
-        env:
-          SCRIPT: ${{ github.workspace }}/scripts/crash-comment.js
-          HEAD: ${{ github.event.pull_request.base.sha }}
-          BUILD: failure
-          STATUS: ''
-          STARTED: '9999-12-31T23:59:59Z'
-          SUMMARY_AUTHOR: ''
-        with:
-          result-encoding: string
-          script: return await require(process.env.SCRIPT)({ github, core })
-      - name: Check that a run whose head moved on writes nothing
-        run: |
-          test "$RESULT" = stale
-          tests/comments.sh says "Planted by a Dangerfile"
-        env:
-          RESULT: ${{ steps.moved.outputs.result }}
-          ID: ${{ steps.crashed.outputs.id }}
-          UPDATED: ${{ steps.planted.outputs.updated }}
-
-      # Fails when the pull request has failures, which this job doesn't
-      # check.
-      - uses: ./
+      # Last whatever failed above, so the pull request keeps the real
+      # summary. Fails when the pull request has failures, which this job
+      # doesn't check.
+      - if: ${{ !cancelled() }}
+        uses: ./
         continue-on-error: true
         with:
           report-artifact: steward-report-unfinished

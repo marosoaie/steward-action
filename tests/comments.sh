@@ -15,6 +15,8 @@
 #       Checks that the oldest summary comment holds each text, and, when
 #       ID or UPDATED is set, that its id or the time it was last written is
 #       that. Writes both to GITHUB_OUTPUT, as `id` and `updated`.
+#   comments.sh clear
+#       Deletes every summary comment, so the next one is created.
 #   comments.sh touch
 #       Rewrites the oldest summary comment, or posts one, as Steward posting
 #       would; run by the Dangerfile tests/unfinished's STOP=touch.
@@ -111,6 +113,12 @@ says)
     expect "When it was last written" "${UPDATED:-$updated}" "$updated"
     printf 'id=%s\nupdated=%s\n' "$id" "$updated" >>"$GITHUB_OUTPUT"
     ;;
+clear)
+    summaries
+    while read -r id; do
+        expect "Deleting the summary $id" 204 "$(api DELETE "issues/comments/$id")"
+    done < <(jq -r .id <"$list")
+    ;;
 touch)
     summaries
     planted="$marker
@@ -134,7 +142,7 @@ kept)
     fi
     ;;
 *)
-    echo "Usage: comments.sh probe allowed|forbidden | plant | gone <id> | says <text>... | touch | kept <id>" >&2
+    echo "Usage: comments.sh probe allowed|forbidden | plant | gone <id> | says <text>... | clear | touch | kept <id>" >&2
     exit 2
     ;;
 esac
