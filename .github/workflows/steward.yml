@@ -90,3 +90,126 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           PULL_REQUEST: ${{ github.event.pull_request.number }}
+
+  # A Dangerfile that doesn't finish leaves a summary comment saying so, and
+  # the next run that reports replaces it (the README's "When the
+  # Dangerfile doesn't finish"). It posts, so it runs as the permission
+  # checks do: with the label, on this repository's own pull requests, and
+  # after them. Each run's outcome must be failure, the job's status
+  # without continue-on-error.
+  unfinished:
+    needs: pull-requests-write
+    if: ${{ !cancelled() && contains(github.event.pull_request.labels.*.name, 'check-permissions') && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+      PULL_REQUEST: ${{ github.event.pull_request.number }}
+      COMMIT: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: crash
+        uses: ./
+        continue-on-error: true
+        env:
+          STOP: crash
+        with:
+          package-path: tests/unfinished
+          product: Stops
+          report-artifact: steward-report-crash
+      - name: Check the comment a crash leaves
+        id: crashed
+        run: |
+          test "$OUTCOME" = failure
+          tests/comments.sh says "Steward didn't finish** on ${COMMIT:0:7}:" "the Dangerfile was stopped by SIG"
+        env:
+          OUTCOME: ${{ steps.crash.outcome }}
+
+      - id: broken
+        uses: ./
+        continue-on-error: true
+        env:
+          STOP: '2'
+        with:
+          package-path: tests/unfinished
+          product: Stops
+          report-artifact: steward-report-broken
+      - name: Check the comment a broken run leaves
+        id: exited
+        run: |
+          test "$OUTCOME" = failure
+          tests/comments.sh says "on ${COMMIT:0:7}: the Dangerfile exited with status 2,"
+        env:
+          OUTCOME: ${{ steps.broken.outcome }}
+          ID: ${{ steps.crashed.outputs.id }}
+
+      - id: unbuilt
+        uses: ./
+        continue-on-error: true
+        with:
+          package-path: tests/unfinished
+          product: Broken
+          report-artifact: steward-report-unbuilt
+      - name: Check the comment a Dangerfile that doesn't build leaves
+        run: |
+          test "$OUTCOME" = failure
+          tests/comments.sh says "on ${COMMIT:0:7}: the Dangerfile didn't build."
+        env:
+          OUTCOME: ${{ steps.unbuilt.outcome }}
+          ID: ${{ steps.crashed.outputs.id }}
+
+      # As Steward does when it posts and then can't finish.
+      - id: touched
+        uses: ./
+        continue-on-error: true
+        env:
+          STOP: touch
+        with:
+          package-path: tests/unfinished
+          product: Stops
+          report-artifact: steward-report-touched
+      - name: Check that a comment written during the run is left alone
+        id: planted
+        run: |
+          test "$OUTCOME" = failure
+          tests/comments.sh says "Planted by a Dangerfile"
+        env:
+          OUTCOME: ${{ steps.touched.outcome }}
+          ID: ${{ steps.crashed.outputs.id }}
+
+      # The script as the Action runs it, for a run whose commit is no
+      # longer the head: the base commit stands in for it, and any comment
+      # counts as written before the run started.
+      - id: moved
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          SCRIPT: ${{ github.workspace }}/scripts/crash-comment.js
+          HEAD: ${{ github.event.pull_request.base.sha }}
+          BUILD: failure
+          STATUS: ''
+          STARTED: '9999-12-31T23:59:59Z'
+          SUMMARY_AUTHOR: ''
+        with:
+          result-encoding: string
+          script: return await require(process.env.SCRIPT)({ github, core })
+      - name: Check that a run whose head moved on writes nothing
+        run: |
+          test "$RESULT" = stale
+          tests/comments.sh says "Planted by a Dangerfile"
+        env:
+          RESULT: ${{ steps.moved.outputs.result }}
+          ID: ${{ steps.crashed.outputs.id }}
+          UPDATED: ${{ steps.planted.outputs.updated }}
+
+      # Fails when the pull request has failures, which this job doesn't
+      # check.
+      - uses: ./
+        continue-on-error: true
+        with:
+          report-artifact: steward-report-unfinished
+      - name: Check that Steward replaced the same comment
+        run: tests/comments.sh kept "$ID"
+        env:
+          ID: ${{ steps.crashed.outputs.id }}
