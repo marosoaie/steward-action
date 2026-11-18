@@ -87,10 +87,15 @@ runs:
         key: steward-${{ runner.os }}-${{ runner.arch }}-${{ steps.swift.outputs.key }}-${{ hashFiles(format('{0}/Package.resolved', inputs.package-path)) }}
         restore-keys: steward-${{ runner.os }}-${{ runner.arch }}-${{ steps.swift.outputs.key }}-
 
+    # `started`, on the runner's clock: a summary comment written after it
+    # is this run's or a newer one's, which the last step leaves alone.
     - name: Build the Dangerfile
+      id: build
       shell: bash
       working-directory: ${{ github.workspace }}
-      run: swift build --package-path "$PACKAGE_PATH" --product "$PRODUCT"
+      run: |
+        echo "started=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >>"$GITHUB_OUTPUT"
+        swift build --package-path "$PACKAGE_PATH" --product "$PRODUCT"
       env:
         PACKAGE_PATH: ${{ inputs.package-path }}
         PRODUCT: ${{ inputs.product }}
@@ -126,3 +131,25 @@ runs:
         path: ${{ steps.run.outputs.report }}
         if-no-files-found: ignore
         overwrite: true
+
+    # When the Dangerfile didn't build, or ended without having reported
+    # (a status other than 0 or 1: a crash, a signal, or Steward's 2, a
+    # broken run), the summary comment from an earlier push would read as
+    # current. This replaces it with one saying Steward didn't finish. The
+    # job has failed already, so the step can't change its outcome, and a
+    # failure to post is a warning.
+    - name: Replace the summary comment
+      if: ${{ !cancelled() && inputs.token != '' && (steps.build.outcome == 'failure' || (steps.run.outcome == 'failure' && steps.run.outputs.status != '1')) }}
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+      env:
+        SCRIPT: ${{ github.action_path }}/scripts/crash-comment.js
+        PULL_REQUEST: ${{ github.event.pull_request.number }}
+        HEAD: ${{ github.event.pull_request.head.sha }}
+        BUILD: ${{ steps.build.outcome }}
+        STATUS: ${{ steps.run.outputs.status }}
+        STARTED: ${{ steps.build.outputs.started }}
+        SUMMARY_AUTHOR: ${{ inputs.summary-author }}
+      with:
+        github-token: ${{ inputs.token }}
+        result-encoding: string
+        script: return await require(process.env.SCRIPT)({ github, core })
