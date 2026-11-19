@@ -7,11 +7,14 @@ run-name: Release v${{ inputs.version }}
 # while the release exists, and its name can't be used again, but its
 # title and notes can still be edited.
 #
-# It runs no tests. The Action is only tested by running it on a pull
-# request, and main is PR-only, with CI's checks required: each commit on
-# it merged with them green. A release's own pull request, which moves the
-# README's pins to its tag, runs them on main as it is just before the
-# release.
+# It runs no tests: the Action is only tested by running it on a pull
+# request. main is PR-only and the ruleset requires CI's checks, but
+# merges go through the maintainer's bypass, since a review is required
+# and there's no second reviewer, so green checks at merge are the
+# maintainer's practice, not a guarantee. A release's own pull request,
+# which moves the README's pins to its tag, is the last one merged before
+# it, and up to date with main when its checks run, so they ran on the
+# tree that's tagged.
 on:
   workflow_dispatch:
     inputs:
@@ -72,6 +75,11 @@ jobs:
       - name: Check the README's pins
         run: scripts/check-readme-pins.sh "$VERSION"
 
+      # GitHub refuses the release with a 404 when the commit's
+      # .github/workflows differ from main's, since GITHUB_TOKEN can't have
+      # the workflows permission: if a pull request changing a workflow
+      # merges after the dispatch, this step fails before anything is
+      # tagged. Dispatch again from main.
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}

@@ -93,8 +93,12 @@ README with a pin that doesn't name the new tag
 (`scripts/check-readme-pins.sh`); then, with the only token in this
 repository's workflows that can push (`contents: write`), it tags the
 commit `vX.Y.Z`, publishes the release, and checks that the tag is that
-commit. It runs no tests: every commit on `main` merged with CI's checks
-green, and the pins' pull request runs them just before the release. A
-published release's tag can't be moved, nor deleted while the release
+commit. It runs no tests. The ruleset requires CI's checks on pull
+requests into `main`, but merges go through the maintainer's bypass,
+since it also requires a review and there's no second reviewer, so green
+checks at merge are the maintainer's practice, not a guarantee. The pins'
+pull request is the last one merged before a release, and up to date
+with `main` when its checks run, so they ran on the tree that's tagged.
+A published release's tag can't be moved, nor deleted while the release
 exists, and its name can't be used again; its title and notes can still
 be edited.
