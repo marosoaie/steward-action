@@ -1,0 +1,110 @@
+name: Release
+run-name: Release v${{ inputs.version }}
+
+# Run by hand, from main, with the version to release: the workflow tags
+# the commit it runs on `v<version>` and publishes a release there. A
+# release is immutable once published: its tag can't be moved, nor deleted
+# while the release exists, and its name can't be used again, but its
+# title and notes can still be edited.
+#
+# It runs no tests: the Action is only tested by running it on a pull
+# request. main is PR-only and the ruleset requires CI's checks, but
+# merges go through the maintainer's bypass, since a review is required
+# and there's no second reviewer, so green checks at merge are the
+# maintainer's practice, not a guarantee. A release's own pull request,
+# which moves the README's pins to its tag, is the last one merged before
+# it, and up to date with main when its checks run, so they ran on the
+# tree that's tagged.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release, MAJOR.MINOR.PATCH without the v (0.1.2 is tagged v0.1.2)"
+        required: true
+        type: string
+      notes:
+        description: "Release notes in Markdown; left empty, GitHub generates them from the merged pull requests"
+        required: false
+        type: string
+        default: ""
+
+# No permissions but what the job asks for.
+permissions: {}
+
+# One release at a time; a second waits for the first instead of racing it
+# to the same tag.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+# bash with pipefail, so that a failed `git ls-remote` fails the step
+# rather than handing the version check an empty list of tags.
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  # Builds nothing and runs nothing from the checkout but the two checks.
+  release:
+    name: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ inputs.version }}
+    steps:
+      # A release tags what main holds; a dispatch can choose any branch.
+      # This guards against a mistake, not a person: a dispatch from
+      # another branch runs that branch's copy of this file.
+      - name: Release only from main
+        run: |
+          [[ "$GITHUB_REF" == refs/heads/main ]] || { echo "Releases run from main, not $GITHUB_REF"; exit 1; }
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # MAJOR.MINOR.PATCH, tagged in neither form, and greater than every
+      # version tagged in either.
+      - name: Check the version
+        run: git ls-remote --tags --refs origin | sed 's|.*refs/tags/||' | scripts/check-release-version.sh "$VERSION"
+
+      # Each tag's README names that tag, so the pins move first, in a pull
+      # request of their own.
+      - name: Check the README's pins
+        run: scripts/check-readme-pins.sh "$VERSION"
+
+      # GitHub refuses the release with a 404 when the commit's
+      # .github/workflows differ from main's, since GITHUB_TOKEN can't have
+      # the workflows permission: if a pull request changing a workflow
+      # merges after the dispatch, this step fails before anything is
+      # tagged. Dispatch again from main.
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NOTES: ${{ inputs.notes }}
+        run: |
+          if [[ -n "$NOTES" ]]; then
+            notes=(--notes "$NOTES")
+          else
+            notes=(--generate-notes)
+          fi
+          gh release create "v$VERSION" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "v$VERSION" \
+            "${notes[@]}"
+
+      # A tag pushed by hand between the check and the publish would be
+      # released where it points, not at --target. This can't prevent
+      # that, but it fails the run if it happened, and shows in the log that
+      # the tag is the commit checked. If it fails, the release is already
+      # published, and a re-run stops at the version check as "already
+      # tagged": the tag needs a look by hand.
+      - name: Check that the tag is the commit checked
+        run: |
+          git fetch --quiet --depth=1 origin "refs/tags/v$VERSION:refs/tags/v$VERSION"
+          tagged=$(git rev-parse "refs/tags/v$VERSION^{commit}")
+          [[ "$tagged" == "$GITHUB_SHA" ]] || { echo "v$VERSION is at $tagged, not at $GITHUB_SHA, which was checked"; exit 1; }
+          echo "v$VERSION is at $GITHUB_SHA, the commit checked."

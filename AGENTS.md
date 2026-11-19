@@ -17,12 +17,13 @@ binaries or Git LFS, and the maintainer choosing versions.
 | Path | What it is |
 |---|---|
 | `action.yml` | The Action: inputs, outputs, and the steps |
-| `scripts/` | The steps' logic, one script each, so ShellCheck sees it |
+| `scripts/` | The steps' logic, one script each, and the release workflow's checks, so ShellCheck sees them |
 | `Dangerfile/` | This repository's own checks, and the fixture CI runs the Action on |
 | `tests/` | Scripts the CI's checks use |
 | `docs/decisions.md` | The design decisions and their alternatives; add a row with each new one |
 | `.github/workflows/steward.yml` | The README's usage with `uses: ./`; posts the summary comment |
 | `.github/workflows/ci.yml` | Lint, the fixture's tests, and the Action in a container, on macOS, with swiftly, and unable to post |
+| `.github/workflows/release.yml` | Run by hand to tag and publish a release |
 
 ## Rules
 
@@ -69,10 +70,35 @@ delete comments, which notify.
 
 ## Releases
 
-The maintainer tags releases, starting at `v0.1.0`; they're independent
-of swift-steward's versions. Under 0.x a minor release may break, so
-workflows pin an exact tag such as `@v0.1.1`, or a SHA. A moving major
-tag, `v1`, as GitHub recommends for actions, waits for 1.0; it will mean
-"these inputs".
+Releases are tagged `vX.Y.Z`, starting at `v0.1.0`, and are immutable
+once published; their versions are independent of swift-steward's. The
+maintainer drives version numbers and releases; never tag or release
+unprompted. Under 0.x a minor release may break, so workflows pin an
+exact tag such as `@v0.1.1`, or a SHA. A moving major tag, `v1`, as
+GitHub recommends for actions, waits for 1.0; it will mean "these
+inputs".
 The README's two pins name the latest release's tag. A release moves them
-to its own tag before it's tagged, so each tag's README names that tag.
+to its own tag, in a pull request merged before it's tagged, so each
+tag's README names that tag.
+
+A release is made by the Release workflow
+(`.github/workflows/release.yml`), run by hand from `main` with the
+version, `MAJOR.MINOR.PATCH` without the `v`, and optional notes, which
+GitHub generates when none are given:
+`gh workflow run release.yml --ref main -f version=0.1.2 -F notes=@notes.md`.
+It refuses a version that's already tagged, or isn't greater than every
+version tagged so far, with or without the `v`
+(`scripts/check-release-version.sh`, as steward-lang-swift's), and a
+README with a pin that doesn't name the new tag
+(`scripts/check-readme-pins.sh`); then, with the only token in this
+repository's workflows that can push (`contents: write`), it tags the
+commit `vX.Y.Z`, publishes the release, and checks that the tag is that
+commit. It runs no tests. The ruleset requires CI's checks on pull
+requests into `main`, but merges go through the maintainer's bypass,
+since it also requires a review and there's no second reviewer, so green
+checks at merge are the maintainer's practice, not a guarantee. The pins'
+pull request is the last one merged before a release, and up to date
+with `main` when its checks run, so they ran on the tree that's tagged.
+A published release's tag can't be moved, nor deleted while the release
+exists, and its name can't be used again; its title and notes can still
+be edited.
