@@ -11,7 +11,9 @@
 // HEAD, since a newer run will post, nor when a summary comment was written
 // since the Dangerfile started, since Steward may have posted and then
 // exited with 2. A failure is a warning. Nothing from the pull request goes
-// into the text but HEAD, checked to be a SHA.
+// into the text but HEAD, checked to be a SHA, and STATUS, used only when
+// it's all digits and written as a number, or as the name of the signal it
+// stands for, from node's own table.
 //
 // Reads PULL_REQUEST, HEAD, BUILD (the build step's outcome), STATUS (the
 // Dangerfile's exit status, empty when it didn't run), STARTED (when it

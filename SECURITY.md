@@ -19,9 +19,11 @@ anything the workflow didn't ask for.
   gets `token` in its environment, and so does the one that replaces the
   summary comment when the Dangerfile didn't finish. That one runs after
   the Dangerfile, as the report's upload does, with the same token, so a
-  pull request gains nothing from it. Its comment is fixed text: of the
-  pull request, only the head commit's SHA goes into it, checked to be
-  one.
+  pull request gains nothing from it. Its comment is fixed text, and
+  only two things from the pull request go into it: the head commit's
+  SHA, checked to be one, and the Dangerfile's exit status, used only
+  when it's all digits and written as a number, or as the name of the
+  signal it stands for, from node's own table.
 
 ## What the Action doesn't protect against
 
