@@ -7,9 +7,9 @@ let package = Package(
     name: "Dangerfile",
     platforms: [.macOS(.v26)],
     dependencies: [
-        // As in swift-steward's template: Steward 0.3.x, at the release
+        // As in swift-steward's template: Steward 0.4.x, at the release
         // Package.resolved pins; `swift package update` takes its fixes.
-        .package(url: "https://github.com/marosoaie/swift-steward.git", .upToNextMinor(from: "0.3.0")),
+        .package(url: "https://github.com/marosoaie/swift-steward.git", .upToNextMinor(from: "0.4.0")),
     ],
     targets: [
         .executableTarget(
