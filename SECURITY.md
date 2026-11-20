@@ -22,8 +22,8 @@ anything the workflow didn't ask for.
   pull request gains nothing from it. Its comment is fixed text, and
   only two things from the pull request go into it: the head commit's
   SHA, checked to be one, and the Dangerfile's exit status, used only
-  when it's all digits and written as a number, or as the name of the
-  signal it stands for, from node's own table.
+  when it's all digits and written as a number, with the name of the
+  signal it stands for, from node's own table, when it stands for one.
 
 ## What the Action doesn't protect against
 
